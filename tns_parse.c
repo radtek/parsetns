@@ -6,7 +6,6 @@
 
 #include "tns_parse.h"
 
-#ifdef TNS_CODE_DEVELOPING
 	/**
 	 * @brief Test if text starts with prefix
 	 *
@@ -15,19 +14,6 @@
 	 *
 	 * @return text if matched, 0 otherwise 
 	 */
-	static char *idpi_tns_match_prefix(char *text, char *prefix)
-	{
-	    char *p = text, *q = prefix;
-	    while (*q != '\0')
-	    {
-	        if (*p != *q) 
-	        {
-	            return NULL;
-	        }
-	        p++, q++;
-	    }
-	    return text;
-	}
 
 	int idpi_tns_print_header(idpi_tns_parser_t *psr)
 	{
@@ -58,7 +44,7 @@
 		return 0;
 	}
 
-	int idpi_tns_parse_processing(void* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction)
+	int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction)
 	{
 	    idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
 	    uint8_t tmp_direction = direction;
@@ -80,4 +66,3 @@
 		return 0;
 	}
 
-#endif
