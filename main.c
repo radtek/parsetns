@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include "tns_parse.h"
+
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, unsigned char* buf, uint32_t buf_len, uint8_t direction);
 
 int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
@@ -12,7 +13,12 @@ int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 	if(psr)
 	{
 		psr->parse_state        = __IDPI_TNS_PARSE_STATE_INIT;
-		psr->first_12_byte_left = TNS_HEADER_AND_EXTENDED_LENGTH;
+		psr->first_14_byte_left = TNS_HEADER_AND_EXTENDED_LENGTH;
+		psr->response_needed    = 0;
+		psr->direction          = 1;
+		psr->data_flag          = 0;
+		psr->id_subid           = 0;
+		psr->id_subid_extended  = 0;
 	}
 	else
 		return -1;
@@ -36,32 +42,100 @@ uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint16_t flag2, uint16_
 	if((data_flag == 0) && (id_subid == 0x1169) && (id_subid_extended == 0x1201))
 	{
 		//TODO end fo connect client
+		printf("Payload is TNS_DATA_RESPONSE_CLOSE_SESSION\n");	
 		return TNS_DATA_RESPONSE_CLOSE_SESSION;
 	}
 	else if((data_flag == 0) && (id_subid == 0x1169))
 	{
 		//TODO end of connect server
-		return TNS_DATA_SQL_COMMAND;
+		printf("Payload is TNS_DATA_SQL_COMMAND1\n");	
+		return TNS_DATA_SQL_COMMAND1;
 	}
 	else if((data_flag == 0) && (id_subid == 0x035e))
 	{
-		return TNS_DATA_SQL_COMMAND;
+		printf("Payload is TNS_DATA_SQL_COMMAND2\n");	
+		return TNS_DATA_SQL_COMMAND2;
 	}
 	else if((data_flag == 0) && (id_subid == 0x0376))
 	{
+		printf("Payload is TNS_DATA_USER_INFO\n");
 		return TNS_DATA_USER_INFO;
 	}
 	else if((data_flag == 0) && (id_subid == 0x0305))
 	{
+		printf("Payload is TNS_DATA_FETCH_MORE\n");
 		return TNS_DATA_FETCH_MORE;
 	}
 	else
+	{
+		printf("Payload is TNS_DATA_ALL_OTHER\n");
 		return TNS_DATA_ALL_OTHER;
+	}
+}
+int idpi_tns_parse_skip_unconcerned_packet_buf(idpi_tns_parser_t *psr)
+{
+	if(psr)
+	{
+		printf("skipping ignore packer\n");
+		if(psr->skip_flag == 1)
+		{
+			if(psr->pktbuf_left > psr->skip_left)
+			{
+				psr->pktbuf_left -= psr->skip_left;
+				psr->pktbuf_curr += psr->skip_left;
+				psr->skip_flag = 0;
+			} 
+			else
+			{
+				psr->skip_left -= psr->pktbuf_left;
+				psr->pktbuf_left = 0;
+				psr->skip_flag = 1;
+			}
+		}
+	}
+	else
+		return -1;
+
+	return 0;
+}
+int idpi_tns_parse_skip_unconcerned_configure(idpi_tns_parser_t *psr)
+{
+	if(psr)
+	{
+		psr->skip_left = psr->tns_pkt_length - TNE_HEADER_LENGTH;
+
+		if(psr->pktbuf_left >= psr->skip_left)
+		{
+			psr->pktbuf_left -= psr->skip_left;
+			psr->pktbuf_curr += psr->skip_left;
+			//printf("psr->pktbuf_left > psr->skip_left\n");
+		}
+		else
+		{
+			//printf("psr->pktbuf_left <= psr->skip_left\n");
+			psr->skip_left -= psr->pktbuf_left;
+			psr->pktbuf_left = 0;
+			psr->skip_flag = 1;
+		}
+	}
+}
+int idpi_tns_parse_payload_resend(idpi_tns_parser_t *psr)
+{
+	if(psr)
+	{
+		idpi_tns_parse_skip_unconcerned_configure(psr);
+	}
+	else
+		return -1;
+
+	return 0;
 }
 int idpi_tns_parse_payload_connect(idpi_tns_parser_t *psr)
 {
 	if(psr)
-		;//do nothing
+	{
+		idpi_tns_parse_skip_unconcerned_configure(psr);
+	}
 	else
 		return -1;
 
@@ -75,6 +149,8 @@ int idpi_tns_parse_payload_accept(idpi_tns_parser_t *psr)
 		psr->tns_version = parser_cursor[0] << 8;
 		psr->tns_version += parser_cursor[1];
 		printf("psr->tns_version is %u\n", psr->tns_version);
+
+		idpi_tns_parse_skip_unconcerned_configure(psr);
 	}
 	else
 		return -1;
@@ -86,37 +162,77 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 	//TODO
 	if(psr)
 	{
-		unsigned char *parser_cursor = psr->pktbuf_curr + 8;
-		psr->data_flag = parser_cursor[0] << 8;
-		psr->data_flag += parser_cursor[1];
-		printf("psr->data_flag is %x\n", psr->data_flag);
+		if((psr->direction == 1) && (psr->response_needed == 1))
+		{
+			unsigned char *parser_cursor = psr->pktbuf_curr + 2;
+			
+			int i = 0;
+			printf("Payload is select response:\n");
+			for(i = 0; i <= (psr->tns_pkt_length - 8 - 2 - 70); i++)
+			{
+				printf("%x", *(parser_cursor+70+i));
+			}
+			printf("\n");
 
-		parser_cursor = parser_cursor + 2;
-		psr->id_subid += parser_cursor[0] << 8;
-		psr->id_subid += parser_cursor[1];
+			psr->response_needed = 0; 
+			idpi_tns_parse_skip_unconcerned_configure(psr);// this should be replaced by copy to log
+		}
+		else if(psr->direction == 1)
+		{
+			printf("Payload is other content to be ignore\n");
+			idpi_tns_parse_skip_unconcerned_configure(psr);
+		}
+		else// if(psr->direction == 1)
+		{
+			//TODO add Direction
+			unsigned char *parser_cursor = psr->pktbuf_curr;
 
-		parser_cursor = parser_cursor + 2;
-		psr->id_subid_extended += parser_cursor[0] << 8;
-		psr->id_subid_extended += parser_cursor[1];
+			psr->data_flag = parser_cursor[0] << 8;
+			psr->data_flag += parser_cursor[1];
+			//printf("psr->data_flag is %u\n", psr->data_flag);
 
-		psr->payload_data_type = idpi_tns_parse_payload_data_type(psr->data_flag, psr->id_subid, psr->id_subid_extended);
-		if(psr->payload_data_type != 0)
-		{	
+			parser_cursor = parser_cursor + 2;
+			psr->id_subid += parser_cursor[0] << 8;
+			psr->id_subid += parser_cursor[1];
+			//printf("psr->id_subid is %x\n", psr->id_subid);
+
+			parser_cursor = parser_cursor + 2;
+			psr->id_subid_extended += parser_cursor[0] << 8;
+			psr->id_subid_extended += parser_cursor[1];
+			//printf("psr->id_subid_extended is %x\n", psr->id_subid_extended);
+
+			psr->payload_data_type = idpi_tns_parse_payload_data_type(psr->data_flag, psr->id_subid, psr->id_subid_extended);
+		
 			switch(psr->payload_data_type)
 			{
-				case TNS_DATA_SQL_COMMAND:
-					printf("Payload is SQL\n");
+				case TNS_DATA_SQL_COMMAND1://need add decide whether is selcet
+					psr->response_needed = 1; //next response need to be logged
+					printf("Payload is SQL COMMAND1:\n%s\n", (parser_cursor+67));
+					idpi_tns_parse_skip_unconcerned_configure(psr);// this should be replaced by copy to log
 					break;
+
+				case TNS_DATA_SQL_COMMAND2://need add decide whether is selcet
+					psr->response_needed = 1; //next response need to be logged
+					printf("Payload is SQL COMMAND2:\n%s\n", (parser_cursor+55));
+					idpi_tns_parse_skip_unconcerned_configure(psr);// this should be replaced by copy to log
+					break;
+
 				case TNS_DATA_USER_INFO:
-					printf("Payload is USER INFO\n");			
+					printf("Payload is USER INFO:\n%s\n", (parser_cursor+18));
+					idpi_tns_parse_skip_unconcerned_configure(psr);// this should be replaced by copy to log			
+					break;
+
+				case TNS_DATA_ALL_OTHER:
+					printf("Payload is TNS_DATA_ALL_OTHER to be ignore\n");	
+					idpi_tns_parse_skip_unconcerned_configure(psr);
 					break;
 				//TODO other cases
 			}
-			return 0;
-		}
-		else
-		{
-			//TODO invalid data
+
+			psr->data_flag = 0;
+			psr->id_subid = 0;
+			psr->id_subid_extended = 0;
+
 			return 0;
 		}
 	}
@@ -161,14 +277,14 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, unsigned char* bu
     
 	uint8_t ret = -1;
 	idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
-    uint8_t tmp_direction = direction;
+    psr->direction = direction;
     idpi_tns_state_e tmp_parse_state = psr->parse_state;
     //assert(psr);
     if((tmp_parse_state == __IDPI_TNS_PARSE_STATE_REQUESTING) || (tmp_parse_state == __IDPI_TNS_PARSE_STATE_RESPONDING))
     {
     	//TODO wait for next buffer data
     }
-    else if (tmp_parse_state == __IDPI_TNS_PARSE_STATE_HEADERPARSING)
+    else if(tmp_parse_state == __IDPI_TNS_PARSE_STATE_HEADERPARSING)
     {
     	//TODO wait for next buffer header
     }
@@ -177,180 +293,129 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, unsigned char* bu
     	psr->pktbuf_init = buf;
 	    psr->pktbuf_curr = buf;
 	    psr->pktbuf_left = buf_len;
-	    //while(psr->pktbuf_left >= psr->first_12_byte_left)
-	    if(psr->pktbuf_left >= psr->first_12_byte_left)
+	    //while(psr->pktbuf_left >= psr->first_14_byte_left)
+	    while(psr->pktbuf_left > 0)
 	    {
-	        if(!idpi_tns_parse_header(psr))
-	        {
-	        	psr->pktbuf_curr += 8;
-	        	psr->pktbuf_left -= 8;
-	        	switch(psr->content_type)
-	        	{
-	        		case TNS_TYPE_CONNECT:
-	        			ret = idpi_tns_parse_payload_connect(psr);
-	        			if(ret != -1)
-	        			{
-	        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTING;
-	        				printf("psr->parse_state is %u\n", psr->parse_state);
-	        			}
-	        			break;
+	    	if(psr->skip_flag == 1)
+		    {
+		    	idpi_tns_parse_skip_unconcerned_packet_buf(psr);//skip the whole remain of the packet
+		    	psr->skip_flag = 0;
+		    }
+		    else
+		    {
+		    	if(psr->pktbuf_left >= psr->first_14_byte_left)
+			    {
+			        if(!idpi_tns_parse_header(psr))
+			        {
+			        	psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
+			        	psr->pktbuf_left -= TNE_HEADER_LENGTH; /* skip header*/
+			        	switch(psr->content_type)
+			        	{
+			        		case TNS_TYPE_CONNECT:
+			        			printf("TNS_TYPE_CONNECT\n");
+			        			ret = idpi_tns_parse_payload_connect(psr);
+			        			if(ret != -1)
+			        			{
+			        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTING;
+			        				printf("psr->parse_state is %u\n", psr->parse_state);
+			        			}
+			        			break;
 
-	        		case TNS_TYPE_ACCEPT:
-	        			ret = idpi_tns_parse_payload_accept(psr);
-	        			if(ret != -1)
-	        			{
-	        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTED;
-	        				printf("psr->parse_state is %u\n", psr->parse_state);
-	        			}
-	        			break;
+			        		case TNS_TYPE_ACCEPT:
+			        			printf("TNS_TYPE_ACCEPT\n");
+			        			ret = idpi_tns_parse_payload_accept(psr);
+			        			if(ret != -1)
+			        			{
+			        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTED;
+			        				printf("psr->parse_state is %u\n", psr->parse_state);
+			        			}
+			        			break;
+			        		case TNS_TYPE_DATA:
+			        			printf("TNS_TYPE_DATA\n");
+			        			idpi_tns_parse_payload_data(psr);
+			        			break;
 
-	        		case TNS_TYPE_ACK:
-	        			break;
+			        		/*case TNS_TYPE_NULL:
+			        			break;
 
-	        		case TNS_TYPE_REFUSE:
-	        			break;
+			        		case TNS_TYPE_ABORT:
+			        			break;
 
-	        		case TNS_TYPE_REDIRECT:
-	        			break;
+			        		case TNS_TYPE_RESEND:
+			        			break;
 
-	        		case TNS_TYPE_DATA:
-	        			idpi_tns_parse_payload_data(psr);
-	        			break;
+			        		case TNS_TYPE_MARKER:
+			        			break;
 
-	        		case TNS_TYPE_NULL:
-	        			break;
+			        		case TNS_TYPE_ATTENTION:
+			        			break;
 
-	        		case TNS_TYPE_ABORT:
-	        			break;
+			        		case TNS_TYPE_CONTROL:
+			        			break;
 
-	        		case TNS_TYPE_RESEND:
-	        			break;
+			        		case TNS_TYPE_MAX:
+			        			break;
 
-	        		case TNS_TYPE_MARKER:
-	        			break;
+			        		case TNS_TYPE_ACK:
+			        			break;
 
-	        		case TNS_TYPE_ATTENTION:
-	        			break;
+			        		case TNS_TYPE_REFUSE:
+			        			break;
 
-	        		case TNS_TYPE_CONTROL:
-	        			break;
-
-	        		case TNS_TYPE_MAX:
-	        			break;
-	        	}
-	        }
-	    }
-	    else
-	    {
-	        //TODO
-	        //printf("%s\n", psr->pktbuf_left<12);
-
-	        return 0;
+			        		case TNS_TYPE_REDIRECT:
+			        			break;*/		        			
+			        	}
+			        }
+			    }
+			    else
+			    {	int ret = 1;
+			    	idpi_tns_parse_header(psr);
+			    	psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
+			        psr->pktbuf_left -= TNE_HEADER_LENGTH;
+			        if(psr->content_type == TNS_TYPE_RESEND)//parse resend
+			        {
+			        	printf("TNS_TYPE_RESEND\n");
+			        	idpi_tns_parse_payload_resend(psr);
+			        }
+			        else if(psr->content_type == TNS_TYPE_DATA) //data type but length < 12
+			        {
+				        ;
+			        }
+			        else
+			        {
+			        	//TODO header or extended not complete
+				        //printf("%s\n", psr->pktbuf_left<12);
+			        }
+			    }
+		    }
 	    }
     }
+    printf("*************************\n");
     
     //idpi_tns_print_header(psr);
     return 0;
 }
+
 int main()
 {
-	unsigned char buf1[] = {//connect packet
-		0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 
-		0x01, 0x39, 0x01, 0x2c, 0x00, 0x00, 0x08, 0x00, 
-		0x7f, 0xff, 0xc6, 0x0e, 0x00, 0x00, 0x01, 0x00, 
-		0x00, 0xc6, 0x00, 0x3a, 0x00, 0x00, 0x02, 0x00, 
-		0x41, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x28, 0x44, 0x45, 0x53, 0x43, 0x52, 
-		0x49, 0x50, 0x54, 0x49, 0x4f, 0x4e, 0x3d, 0x28, 
-		0x41, 0x44, 0x44, 0x52, 0x45, 0x53, 0x53, 0x3d, 
-		0x28, 0x50, 0x52, 0x4f, 0x54, 0x4f, 0x43, 0x4f, 
-		0x4c, 0x3d, 0x74, 0x63, 0x70, 0x29, 0x28, 0x48, 
-		0x4f, 0x53, 0x54, 0x3d, 0x31, 0x39, 0x32, 0x2e, 
-		0x31, 0x36, 0x38, 0x2e, 0x38, 0x2e, 0x35, 0x32, 
-		0x29, 0x28, 0x50, 0x4f, 0x52, 0x54, 0x3d, 0x31, 
-		0x35, 0x32, 0x31, 0x29, 0x29, 0x28, 0x43, 0x4f, 
-		0x4e, 0x4e, 0x45, 0x43, 0x54, 0x5f, 0x44, 0x41, 
-		0x54, 0x41, 0x3d, 0x28, 0x53, 0x45, 0x52, 0x56, 
-		0x49, 0x43, 0x45, 0x5f, 0x4e, 0x41, 0x4d, 0x45, 
-		0x3d, 0x6f, 0x61, 0x73, 0x69, 0x73, 0x44, 0x42, 
-		0x31, 0x32, 0x63, 0x29, 0x28, 0x43, 0x49, 0x44, 
-		0x3d, 0x28, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 
-		0x4d, 0x3d, 0x44, 0x3a, 0x5c, 0x70, 0x72, 0x6f, 
-		0x67, 0x72, 0x61, 0x6d, 0x3f, 0x66, 0x69, 0x6c, 
-		0x65, 0x73, 0x5c, 0x50, 0x72, 0x65, 0x6d, 0x69, 
-		0x75, 0x6d, 0x53, 0x6f, 0x66, 0x74, 0x5c, 0x4e, 
-		0x61, 0x76, 0x69, 0x63, 0x61, 0x74, 0x3f, 0x4c, 
-		0x69, 0x74, 0x65, 0x5c, 0x6e, 0x61, 0x76, 0x69, 
-		0x63, 0x61, 0x74, 0x2e, 0x65, 0x78, 0x65, 0x29, 
-		0x28, 0x48, 0x4f, 0x53, 0x54, 0x3d, 0x44, 0x44, 
-		0x44, 0x29, 0x28, 0x55, 0x53, 0x45, 0x52, 0x3d, 
-		0x64, 0x65, 0x6c, 0x6c, 0x29, 0x29, 0x29, 0x29 
-	};
-
-	unsigned char buf2[] = {//accept packet
-		0x00, 0x20, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 
-		0x01, 0x39, 0x00, 0x01, 0x08, 0x00, 0x7f, 0xff, 
-		0x01, 0x00, 0x00, 0x00, 0x00, 0x20, 0x41, 0x41, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
-	};
-	unsigned char buf3[] = {//data delete packet
-		0x00, 0xaf, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x11, 0x69, 0x31, 0x01, 0x01, 0x00, 
-		0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x03, 0x5e, 
-		0x32, 0x21, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x01, 0x2c, 0x00, 0x00, 0x00, 0x01, 0x0d, 
-		0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 
-		0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x2c, 0x64, 
-		0x65, 0x6c, 0x65, 0x74, 0x65, 0x20, 0x66, 0x72, 
-		0x6f, 0x6d, 0x20, 0x65, 0x6d, 0x70, 0x6c, 0x6f, 
-		0x79, 0x65, 0x65, 0x20, 0x77, 0x68, 0x65, 0x72, 
-		0x65, 0x20, 0x66, 0x69, 0x72, 0x73, 0x74, 0x6e, 
-		0x61, 0x6d, 0x65, 0x3d, 0x27, 0x7a, 0x68, 0x61, 
-		0x6e, 0x67, 0x27, 0x01, 0x00, 0x00, 0x00, 0x01, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
-	};
-	unsigned char buf4[] = {
-		0x00, 0xc5, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x03, 0x76, 0x02, 0x01, 0x03, 0x00, 
-		0x00, 0x00, 0x21, 0x00, 0x00, 0x00, 0x01, 0x05, 
-		0x00, 0x00, 0x00, 0x01, 0x01, 0x03, 0x73, 0x79, 
-		0x73, 0x0d, 0x00, 0x00, 0x00, 0x0d, 0x41, 0x55, 
-		0x54, 0x48, 0x5f, 0x54, 0x45, 0x52, 0x4d, 0x49, 
-		0x4e, 0x41, 0x4c, 0x03, 0x00, 0x00, 0x00, 0x03, 
-		0x44, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 0x0f, 
-		0x00, 0x00, 0x00, 0x0f, 0x41, 0x55, 0x54, 0x48, 
-		0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d, 
-		0x5f, 0x4e, 0x4d, 0x0b, 0x00, 0x00, 0x00, 0x0b, 
-		0x6e, 0x61, 0x76, 0x69, 0x63, 0x61, 0x74, 0x2e, 
-		0x65, 0x78, 0x65, 0x00, 0x00, 0x00, 0x00, 0x0c, 
-		0x00, 0x00, 0x00, 0x0c, 0x41, 0x55, 0x54, 0x48, 
-		0x5f, 0x4d, 0x41, 0x43, 0x48, 0x49, 0x4e, 0x45, 
-		0x07, 0x00, 0x00, 0x00, 0x07, 0x44, 0x53, 0x50, 
-		0x5c, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 
-		0x08, 0x00, 0x00, 0x00, 0x08, 0x41, 0x55, 0x54, 
-		0x48, 0x5f, 0x50, 0x49, 0x44, 0x0d, 0x00, 0x00, 
-		0x00, 0x0d, 0x31, 0x32, 0x35, 0x31, 0x38, 0x30, 
-		0x3a, 0x31, 0x32, 0x36, 0x32, 0x38, 0x30, 0x00, 
-		0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x08, 
-		0x41, 0x55, 0x54, 0x48, 0x5f, 0x53, 0x49, 0x44, 
-		0x04, 0x00, 0x00, 0x00, 0x04, 0x64, 0x65, 0x6c, 
-		0x6c, 0x00, 0x00, 0x00, 0x00 
-	};	
-	
-	unsigned char* buf = buf2;
 	idpi_tns_parser_t *ptr = (idpi_tns_parser_t*)malloc(sizeof(idpi_tns_parser_t));
+	
 	idpi_tns_parse_flow_init(ptr);
-	idpi_tns_parse_processing(ptr, buf, 32, 1);
+
+	int i =0;
+	for(i = 0; i < BUFFER_NUM; i++)
+	{
+		if(i%2 == 0)
+		{
+			idpi_tns_parse_processing(ptr, buf[i], buf_len[i], 0);
+		}
+		else
+		{
+			idpi_tns_parse_processing(ptr, buf[i], buf_len[i], 1);
+		}
+		//buf_len = ((sizeof paste(buf, i)) / (sizeof (unsigned char)));
+		//printf("buf_len is %u \n", buf_len[i]);
+	}
 
 	free(ptr);
 
