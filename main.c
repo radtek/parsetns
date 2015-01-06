@@ -7,17 +7,30 @@
 #include "tns_parse.h"
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, unsigned char* buf, uint32_t buf_len, uint8_t direction);
 
+int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
+{
+	if(psr)
+	{
+		psr->parse_state        = __IDPI_TNS_PARSE_STATE_INIT;
+		psr->first_12_byte_left = TNS_HEADER_AND_EXTENDED_LENGTH;
+	}
+	else
+		return -1;
+
+	return 0;
+}
+
 int idpi_tns_print_header(idpi_tns_parser_t *psr)
 {
-        printf("%d\n", psr->header_cache.type);
+        //printf("%d\n", psr->header_cache.type);
 
         return 0;
 }
-uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint32_t flag2, uint16_t flag3)
+uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint16_t flag2, uint16_t flag3)
 {
 	//TODO
 	uint16_t data_flag = flag1;
-	uint32_t id_subid  = flag2;
+	uint16_t id_subid  = flag2;
 	uint16_t id_subid_extended = flag3;
 
 	if((data_flag == 0) && (id_subid == 0x1169) && (id_subid_extended == 0x1201))
@@ -45,6 +58,29 @@ uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint32_t flag2, uint16_
 	else
 		return TNS_DATA_ALL_OTHER;
 }
+int idpi_tns_parse_payload_connect(idpi_tns_parser_t *psr)
+{
+	if(psr)
+		;//do nothing
+	else
+		return -1;
+
+	return 0;
+}
+int idpi_tns_parse_payload_accept(idpi_tns_parser_t *psr)
+{
+	if(psr)
+	{
+		unsigned char *parser_cursor = psr->pktbuf_curr;
+		psr->tns_version = parser_cursor[0] << 8;
+		psr->tns_version += parser_cursor[1];
+		printf("psr->tns_version is %u\n", psr->tns_version);
+	}
+	else
+		return -1;
+
+	return 0;
+}
 int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 {
 	//TODO
@@ -63,12 +99,16 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 		psr->id_subid_extended += parser_cursor[0] << 8;
 		psr->id_subid_extended += parser_cursor[1];
 
-		if((psr->payload_data_type = idpi_tns_parse_payload_data_type(psr->data_flag, psr->id_subid, psr->id_subid_extended)) != 0)
+		psr->payload_data_type = idpi_tns_parse_payload_data_type(psr->data_flag, psr->id_subid, psr->id_subid_extended);
+		if(psr->payload_data_type != 0)
 		{	
 			switch(psr->payload_data_type)
 			{
 				case TNS_DATA_SQL_COMMAND:
 					printf("Payload is SQL\n");
+					break;
+				case TNS_DATA_USER_INFO:
+					printf("Payload is USER INFO\n");			
 					break;
 				//TODO other cases
 			}
@@ -80,6 +120,9 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 			return 0;
 		}
 	}
+	else
+		return -1;
+	
 
 	return 0;
 }
@@ -100,86 +143,113 @@ int idpi_tns_parse_header(idpi_tns_parser_t *psr)
 		}
 	    else
 	    {
-	            //tns 315
+	        //tns 315
 	    	psr->tns_pkt_length = parser_cursor[2]<<8;
 	    	psr->tns_pkt_length += parser_cursor[3];
 	        
 	        return 0;
 	    }
 	}
+	else
+		return -1;
 
     return 0;
 }
 
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, unsigned char* buf, uint32_t buf_len, uint8_t direction)
 {
-    idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
+    
+	uint8_t ret = -1;
+	idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
     uint8_t tmp_direction = direction;
+    idpi_tns_state_e tmp_parse_state = psr->parse_state;
     //assert(psr);
-    psr->pktbuf_curr = buf;
-    psr->pktbuf_left = buf_len;
-    if(psr->pktbuf_left >= 12)
+    if((tmp_parse_state == __IDPI_TNS_PARSE_STATE_REQUESTING) || (tmp_parse_state == __IDPI_TNS_PARSE_STATE_RESPONDING))
     {
-        if(!idpi_tns_parse_header(psr))
-        {
-        	char *process_cursor = psr->pktbuf_curr + 8;
-        	switch(psr->content_type)
-        	{
-        		case TNS_TYPE_CONNECT:
-        			break;
-
-        		case TNS_TYPE_ACCEPT:
-        			psr->tns_version = process_cursor[0] << 8;
-        			psr->tns_version += process_cursor[1];
-        			printf("psr->tns_version is %u\n", psr->tns_version);
-        			break;
-
-        		case TNS_TYPE_ACK:
-        			break;
-
-        		case TNS_TYPE_REFUSE:
-        			break;
-
-        		case TNS_TYPE_REDIRECT:
-        			break;
-
-        		case TNS_TYPE_DATA:
-        			idpi_tns_parse_payload_data(psr);
-        			break;
-
-        		case TNS_TYPE_NULL:
-        			break;
-
-        		case TNS_TYPE_ABORT:
-        			break;
-
-        		case TNS_TYPE_RESEND:
-        			break;
-
-        		case TNS_TYPE_MARKER:
-        			break;
-
-        		case TNS_TYPE_ATTENTION:
-        			break;
-
-        		case TNS_TYPE_CONTROL:
-        			break;
-
-        		case TNS_TYPE_MAX:
-        			break;
-        	}
-        }
-
+    	//TODO wait for next buffer data
+    }
+    else if (tmp_parse_state == __IDPI_TNS_PARSE_STATE_HEADERPARSING)
+    {
+    	//TODO wait for next buffer header
     }
     else
     {
-        //TODO
-        //printf("%s\n", psr->pktbuf_left<12);
+    	psr->pktbuf_init = buf;
+	    psr->pktbuf_curr = buf;
+	    psr->pktbuf_left = buf_len;
+	    //while(psr->pktbuf_left >= psr->first_12_byte_left)
+	    if(psr->pktbuf_left >= psr->first_12_byte_left)
+	    {
+	        if(!idpi_tns_parse_header(psr))
+	        {
+	        	psr->pktbuf_curr += 8;
+	        	psr->pktbuf_left -= 8;
+	        	switch(psr->content_type)
+	        	{
+	        		case TNS_TYPE_CONNECT:
+	        			ret = idpi_tns_parse_payload_connect(psr);
+	        			if(ret != -1)
+	        			{
+	        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTING;
+	        				printf("psr->parse_state is %u\n", psr->parse_state);
+	        			}
+	        			break;
 
-        return 0;
+	        		case TNS_TYPE_ACCEPT:
+	        			ret = idpi_tns_parse_payload_accept(psr);
+	        			if(ret != -1)
+	        			{
+	        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTED;
+	        				printf("psr->parse_state is %u\n", psr->parse_state);
+	        			}
+	        			break;
+
+	        		case TNS_TYPE_ACK:
+	        			break;
+
+	        		case TNS_TYPE_REFUSE:
+	        			break;
+
+	        		case TNS_TYPE_REDIRECT:
+	        			break;
+
+	        		case TNS_TYPE_DATA:
+	        			idpi_tns_parse_payload_data(psr);
+	        			break;
+
+	        		case TNS_TYPE_NULL:
+	        			break;
+
+	        		case TNS_TYPE_ABORT:
+	        			break;
+
+	        		case TNS_TYPE_RESEND:
+	        			break;
+
+	        		case TNS_TYPE_MARKER:
+	        			break;
+
+	        		case TNS_TYPE_ATTENTION:
+	        			break;
+
+	        		case TNS_TYPE_CONTROL:
+	        			break;
+
+	        		case TNS_TYPE_MAX:
+	        			break;
+	        	}
+	        }
+	    }
+	    else
+	    {
+	        //TODO
+	        //printf("%s\n", psr->pktbuf_left<12);
+
+	        return 0;
+	    }
     }
+    
     //idpi_tns_print_header(psr);
-
     return 0;
 }
 int main()
@@ -247,11 +317,39 @@ int main()
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 
+	};
+	unsigned char buf4[] = {
+		0x00, 0xc5, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 
+		0x00, 0x00, 0x03, 0x76, 0x02, 0x01, 0x03, 0x00, 
+		0x00, 0x00, 0x21, 0x00, 0x00, 0x00, 0x01, 0x05, 
+		0x00, 0x00, 0x00, 0x01, 0x01, 0x03, 0x73, 0x79, 
+		0x73, 0x0d, 0x00, 0x00, 0x00, 0x0d, 0x41, 0x55, 
+		0x54, 0x48, 0x5f, 0x54, 0x45, 0x52, 0x4d, 0x49, 
+		0x4e, 0x41, 0x4c, 0x03, 0x00, 0x00, 0x00, 0x03, 
+		0x44, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 0x0f, 
+		0x00, 0x00, 0x00, 0x0f, 0x41, 0x55, 0x54, 0x48, 
+		0x5f, 0x50, 0x52, 0x4f, 0x47, 0x52, 0x41, 0x4d, 
+		0x5f, 0x4e, 0x4d, 0x0b, 0x00, 0x00, 0x00, 0x0b, 
+		0x6e, 0x61, 0x76, 0x69, 0x63, 0x61, 0x74, 0x2e, 
+		0x65, 0x78, 0x65, 0x00, 0x00, 0x00, 0x00, 0x0c, 
+		0x00, 0x00, 0x00, 0x0c, 0x41, 0x55, 0x54, 0x48, 
+		0x5f, 0x4d, 0x41, 0x43, 0x48, 0x49, 0x4e, 0x45, 
+		0x07, 0x00, 0x00, 0x00, 0x07, 0x44, 0x53, 0x50, 
+		0x5c, 0x44, 0x44, 0x44, 0x00, 0x00, 0x00, 0x00, 
+		0x08, 0x00, 0x00, 0x00, 0x08, 0x41, 0x55, 0x54, 
+		0x48, 0x5f, 0x50, 0x49, 0x44, 0x0d, 0x00, 0x00, 
+		0x00, 0x0d, 0x31, 0x32, 0x35, 0x31, 0x38, 0x30, 
+		0x3a, 0x31, 0x32, 0x36, 0x32, 0x38, 0x30, 0x00, 
+		0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x08, 
+		0x41, 0x55, 0x54, 0x48, 0x5f, 0x53, 0x49, 0x44, 
+		0x04, 0x00, 0x00, 0x00, 0x04, 0x64, 0x65, 0x6c, 
+		0x6c, 0x00, 0x00, 0x00, 0x00 
+	};	
 	
-	unsigned char* buf = buf3;
+	unsigned char* buf = buf2;
 	idpi_tns_parser_t *ptr = (idpi_tns_parser_t*)malloc(sizeof(idpi_tns_parser_t));
-
+	idpi_tns_parse_flow_init(ptr);
 	idpi_tns_parse_processing(ptr, buf, 32, 1);
 
 	free(ptr);

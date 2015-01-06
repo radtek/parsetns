@@ -1,4 +1,5 @@
-#define TNS_HEADER_LENGTH_FIELD_NUM 5;
+#define TNS_HEADER_AND_EXTENDED_LENGTH 12
+#define TNS_USER_NAME_LENGTH_MAX 100
 
 typedef struct 
 {
@@ -7,7 +8,7 @@ typedef struct
 	char type;
 	char rsrvd;
 	uint32_t header_chksm;
-}idpi_tns_header_t;
+}idpi_tns_header_cache_t;
 
 typedef enum
 {
@@ -49,38 +50,55 @@ typedef enum
     TNS_DATA_RESPONSE_CLOSE_SESSION,
 }idpi_tns_payload_data_type_e;
 
+typedef enum
+{
+	__IDPI_TNS_PARSE_STATE_INIT = 0, //
+	__IDPI_TNS_PARSE_STATE_HEADERPARSING = 1,
+	__IDPI_TNS_PARSE_STATE_CONNECTING , //
+	__IDPI_TNS_PARSE_STATE_CONNECTED , //
+	__IDPI_TNS_PARSE_STATE_REDIRECTED , //
+	__IDPI_TNS_PARSE_STATE_ERROR_MARKER , //
+	__IDPI_TNS_PARSE_STATE_REQUESTING , //
+	__IDPI_TNS_PARSE_STATE_REQUESTED , //
+	__IDPI_TNS_PARSE_STATE_RESPONDING , //
+	__IDPI_TNS_PARSE_STATE_RESPONDED , //
+
+}idpi_tns_state_e;
+
 typedef struct
 {
-    //idpi_tns_state_e parse_state;
+    idpi_tns_state_e parse_state;
     idpi_tns_version_e tns_version;
     idpi_tns_content_type_e content_type;
+	char tns_user_name[TNS_USER_NAME_LENGTH_MAX-1];/*cache login user name*/  
     //uint8_t direction;
 //    uint16_t client_port;
 //    uint16_t server_port;
 //  uint32_t segment_count; /*log segment number*/
  //   uint32_t client_ip;
  //   uint32_t server_ip;
-	uint32_t pktbuf_left; /*bytes to read in pkt buffer*/
+
 	uint16_t tns_pkt_length; /*bytes to read in pkt buffer*/
+    uint8_t payload_data_type;
+
+	uint8_t first_12_byte_left;
+	unsigned char *first_12_byte_curr;
+	char first_12_byte[TNS_HEADER_AND_EXTENDED_LENGTH-1];//to cache firsr 12 byte 
+
+    uint16_t data_flag;
+    uint16_t id_subid;
+    uint16_t id_subid_extended;
+
+    uint32_t pktbuf_left; /*bytes to read in pkt buffer*/
+    unsigned char *pktbuf_curr; /*next addr to read in pkt buffer*/
+	unsigned char *pktbuf_init; /*initial addr to read in pkt buffer*/
+	
 	//uint32_t content_left; /*remaining bytes of message-body to read*/
     //uint32_t content_current; /*remaining bytes of message-body to read*/
- //   hili_send_packet_conf_t send_conf;
+	//hili_send_packet_conf_t send_conf;
     //char *response_header[TNS_HEADER_LENGTH-1]; /*restore the current header */
     //char *logbuf_start; /*start addr of log buffer*/
-    //char *logbuf_curr; /*next addr to write in log buffer*/
-    uint8_t payload_data_type;
-    uint16_t data_flag;
-    uint32_t id_subid;
-    uint16_t id_subid_extended;
-    unsigned char *pktbuf_curr; /*next addr to read in pkt buffer*/
-//  char *notep; /*current pos in current note*/
-    //char tns_data_cache_block[IDPI_TNS_MEMO_LEN_LIMIT]; /*memo*/
-    idpi_tns_header_t header_cache;
+    //char *logbuf_curr; /*next addr to write in log buffer*/ 
+	//uint8_t response_parse_falg;/*flag:1 response need to be parse*/
+	//uint8_t wait_for_next_buffer;/*1:wait for next buffer*/
 }idpi_tns_parser_t;
-
-
-
-
-
-
-
