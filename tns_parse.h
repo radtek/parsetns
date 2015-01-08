@@ -124,4 +124,19 @@ typedef struct
 }idpi_tns_parser_t;
 
 
+int idpi_tns_print_pktbuf_curr_shift(idpi_tns_parser_t *psr);
+int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr);
+int idpi_tns_print_header(idpi_tns_parser_t *psr);
+uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint16_t flag2, uint16_t flag3);
+int idpi_tns_parse_skip_unconcerned_packet_buf(idpi_tns_parser_t *psr);
+int idpi_tns_parse_skip_unconcerned_configure(idpi_tns_parser_t *psr);
+int idpi_tns_parse_payload_resend(idpi_tns_parser_t *psr);
+int idpi_tns_parse_payload_connect(idpi_tns_parser_t *psr);
+int idpi_tns_parse_payload_accept(idpi_tns_parser_t *psr);
+int idpi_tns_cache_header_and_extend(idpi_tns_parser_t *psr, unsigned char *buf, uint32_t buf_len);
+int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr);
+int idpi_tns_parse_header(idpi_tns_parser_t *psr);
+int idpi_tns_parse_right_start(idpi_tns_parser_t* psr, uint8_t direction);
+
+int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction);
 

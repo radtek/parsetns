@@ -7,7 +7,48 @@
 #include "tns_parse.h"
 #include "test_buffer2.h"
 
-int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction);
+int main()
+{	
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	idpi_tns_parser_t *ptr = (idpi_tns_parser_t*)malloc(sizeof(idpi_tns_parser_t));
+	
+	idpi_tns_parse_flow_init(ptr);
+
+	//printf("buf_smallbuf2_len is %u\n", buf_smallbuf2_len);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf1, buf_smallbuf1_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf2, buf_smallbuf2_len, 1);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf3, buf_smallbuf3_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf4, buf_smallbuf4_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf5, buf_smallbuf5_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf6, buf_smallbuf6_len, 1);
+
+	int i =0;
+	for(i = 4; i < BUFFER_NUM; i++)
+	{
+		if(i%2 == 0)
+		{
+			idpi_tns_parse_processing(ptr, (void *)buf[i], buf_len[i], 0);
+		}
+		else
+		{
+			idpi_tns_parse_processing(ptr, (void *)buf[i], buf_len[i], 1);
+		}
+		//buf_len = ((sizeof paste(buf, i)) / (sizeof (unsigned char)));
+		//printf("buf_len is %u \n", buf_len[i]);
+	}
+
+	free(ptr);
+
+	return 0;
+}
+
 int idpi_tns_print_pktbuf_curr_shift(idpi_tns_parser_t *psr)
 {
 	uint32_t shift;
@@ -612,46 +653,4 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
     idpi_tns_print_header(psr);
 
     return 0;
-}
-
-int main()
-{	
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	printf("**********************************************************************************\n");
-	idpi_tns_parser_t *ptr = (idpi_tns_parser_t*)malloc(sizeof(idpi_tns_parser_t));
-	
-	idpi_tns_parse_flow_init(ptr);
-
-	//printf("buf_smallbuf2_len is %u\n", buf_smallbuf2_len);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf1, buf_smallbuf1_len, 0);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf2, buf_smallbuf2_len, 1);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf3, buf_smallbuf3_len, 0);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf4, buf_smallbuf4_len, 0);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf5, buf_smallbuf5_len, 0);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf6, buf_smallbuf6_len, 1);
-
-	int i =0;
-	for(i = 4; i < BUFFER_NUM; i++)
-	{
-		if(i%2 == 0)
-		{
-			idpi_tns_parse_processing(ptr, (void *)buf[i], buf_len[i], 0);
-		}
-		else
-		{
-			idpi_tns_parse_processing(ptr, (void *)buf[i], buf_len[i], 1);
-		}
-		//buf_len = ((sizeof paste(buf, i)) / (sizeof (unsigned char)));
-		//printf("buf_len is %u \n", buf_len[i]);
-	}
-
-	free(ptr);
-
-	return 0;
 }
