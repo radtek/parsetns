@@ -382,6 +382,78 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 	return 0;
 }
 
+int idpi_tns_parse_payload(idpi_tns_parser_t *psr)
+{
+	int ret = -1;
+	if(psr)
+	{
+		switch(psr->content_type)
+    	{
+    		case TNS_TYPE_CONNECT:
+    			printf("TNS_TYPE_CONNECT\n");
+    			idpi_tns_print_pktbuf_curr_shift(psr);
+    			ret = idpi_tns_parse_payload_connect(psr);
+    			if(ret != -1)
+    			{
+    				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTING;
+    				printf("psr->parse_state is %u\n", psr->parse_state);
+    			}
+    			break;
+
+    		case TNS_TYPE_ACCEPT:
+    			printf("TNS_TYPE_ACCEPT\n");
+    			idpi_tns_print_pktbuf_curr_shift(psr);
+    			ret = idpi_tns_parse_payload_accept(psr);
+    			if(ret != -1)
+    			{
+    				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTED;
+    				printf("psr->parse_state is %u\n", psr->parse_state);
+    			}
+    			break;
+    		case TNS_TYPE_DATA:
+    			printf("TNS_TYPE_DATA\n");
+    			idpi_tns_print_pktbuf_curr_shift(psr);
+    			idpi_tns_parse_payload_data(psr);
+    			break;
+
+    		/*case TNS_TYPE_NULL:
+    			break;
+
+    		case TNS_TYPE_ABORT:
+    			break;
+
+    		case TNS_TYPE_RESEND:
+    			break;
+
+    		case TNS_TYPE_MARKER:
+    			break;
+
+    		case TNS_TYPE_ATTENTION:
+    			break;
+
+    		case TNS_TYPE_CONTROL:
+    			break;
+
+    		case TNS_TYPE_MAX:
+    			break;
+
+    		case TNS_TYPE_ACK:
+    			break;
+
+    		case TNS_TYPE_REFUSE:
+    			break;
+
+    		case TNS_TYPE_REDIRECT:
+    			break;*/
+    	}
+
+	}
+	else
+		return -1;
+
+	return 0;
+}
+
 int idpi_tns_parse_header(idpi_tns_parser_t *psr)
 {//do not change psr->pktbuf_curr
     //TODO
@@ -460,7 +532,6 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 	idpi_tns_parse_right_start(tns_flow_ptr, direction);
     printf("##############################################\n");
     
-	int ret = -1;
 	idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
     psr->direction = direction;
     idpi_tns_state_e tmp_parse_state = psr->parse_state;
@@ -540,73 +611,14 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 							psr->pktbuf_left -= TNE_HEADER_LENGTH; /* skip header*/
 			        	}
 			        	else
-			        	{printf("psr->pktbuf_left is %u\n", psr->pktbuf_left);
+			        	{
 			        		psr->pktbuf_left -= psr->first_14_byte_last_cached_num;
 	   						psr->pktbuf_curr += psr->first_14_byte_last_cached_num;
 	   						printf("psr->first_14_byte_last_cached_num is %u\n", psr->first_14_byte_last_cached_num);
 			        	}
 
-			        	switch(psr->content_type)
-			        	{
-			        		case TNS_TYPE_CONNECT:
-			        			printf("TNS_TYPE_CONNECT\n");
-			        			idpi_tns_print_pktbuf_curr_shift(psr);
-			        			ret = idpi_tns_parse_payload_connect(psr);
-			        			if(ret != -1)
-			        			{
-			        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTING;
-			        				printf("psr->parse_state is %u\n", psr->parse_state);
-			        			}
-			        			break;
-
-			        		case TNS_TYPE_ACCEPT:
-			        			printf("TNS_TYPE_ACCEPT\n");
-			        			idpi_tns_print_pktbuf_curr_shift(psr);
-			        			ret = idpi_tns_parse_payload_accept(psr);
-			        			if(ret != -1)
-			        			{
-			        				psr->parse_state = __IDPI_TNS_PARSE_STATE_CONNECTED;
-			        				printf("psr->parse_state is %u\n", psr->parse_state);
-			        			}
-			        			break;
-			        		case TNS_TYPE_DATA:
-			        			printf("TNS_TYPE_DATA\n");
-			        			idpi_tns_print_pktbuf_curr_shift(psr);
-			        			idpi_tns_parse_payload_data(psr);
-			        			break;
-
-			        		/*case TNS_TYPE_NULL:
-			        			break;
-
-			        		case TNS_TYPE_ABORT:
-			        			break;
-
-			        		case TNS_TYPE_RESEND:
-			        			break;
-
-			        		case TNS_TYPE_MARKER:
-			        			break;
-
-			        		case TNS_TYPE_ATTENTION:
-			        			break;
-
-			        		case TNS_TYPE_CONTROL:
-			        			break;
-
-			        		case TNS_TYPE_MAX:
-			        			break;
-
-			        		case TNS_TYPE_ACK:
-			        			break;
-
-			        		case TNS_TYPE_REFUSE:
-			        			break;
-
-			        		case TNS_TYPE_REDIRECT:
-			        			break;*/
-	        			
-			        	}
-
+			        	idpi_tns_parse_payload(psr);
+			        	
 			        	if(psr->first_14_byte_cache_is_full == 1)
 		        		{
 		        			psr->first_14_byte_cache_is_full = 0;

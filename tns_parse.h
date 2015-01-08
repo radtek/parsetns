@@ -136,6 +136,7 @@ int idpi_tns_parse_payload_accept(idpi_tns_parser_t *psr);
 int idpi_tns_cache_header_and_extend(idpi_tns_parser_t *psr, unsigned char *buf, uint32_t buf_len);
 int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr);
 int idpi_tns_parse_header(idpi_tns_parser_t *psr);
+int idpi_tns_parse_payload(idpi_tns_parser_t *psr);
 int idpi_tns_parse_right_start(idpi_tns_parser_t* psr, uint8_t direction);
 
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction);
