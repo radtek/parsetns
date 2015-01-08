@@ -76,7 +76,11 @@ typedef struct
     idpi_tns_version_e tns_version;
     idpi_tns_content_type_e content_type;
 
-	char tns_user_name[TNS_USER_NAME_LENGTH_MAX-1];/*cache login user name*/  
+	char tns_user_name[TNS_USER_NAME_LENGTH_MAX-1];/*cache login user name*/
+
+	uint32_t buf_num;
+	uint8_t first_buf_direction;  
+	uint8_t parse_start;
     uint8_t direction;//0:request 1:response
 //    uint16_t client_port;
 //    uint16_t server_port;

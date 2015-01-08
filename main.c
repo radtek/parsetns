@@ -18,7 +18,7 @@ int idpi_tns_print_pktbuf_curr_shift(idpi_tns_parser_t *psr)
 	else
 		return -1;
 
-	printf("idpi_tns_print_pktbuf_curr_shift is %u\n", shift);
+	//printf("idpi_tns_print_pktbuf_curr_shift is %u\n", shift);
 
 	return 0;
 }
@@ -27,18 +27,21 @@ int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 {
 	if(psr)
 	{
-		psr->parse_state        = __IDPI_TNS_PARSE_STATE_INIT;
-		psr->response_needed    = 0;
-		psr->parse_state        = 0;
-		psr->direction          = 1;
-		psr->data_flag          = 0;
-		psr->id_subid           = 0;
-		psr->id_subid_extended  = 0;
-		psr->wait_for_header    = 0;
-		psr->wait_for_request   = 0;
-		psr->wait_for_response  = 0;
-		psr->pktbuf_left        = 0;
-		psr->skip_flag          = 0;
+		psr->parse_state           = __IDPI_TNS_PARSE_STATE_INIT;
+		psr->response_needed       = 0;
+		psr->parse_state       	   = 0;
+		psr->buf_num 			   = 0;
+		psr->parse_start		   = 0; 
+		psr->direction         	   = 3;
+		psr->first_buf_direction   = 3;
+		psr->data_flag         	   = 0;
+		psr->id_subid          	   = 0;
+		psr->id_subid_extended 	   = 0;
+		psr->wait_for_header       = 0;
+		psr->wait_for_request      = 0;
+		psr->wait_for_response     = 0;
+		psr->pktbuf_left           = 0;
+		psr->skip_flag             = 0;
 		psr->first_14_byte_hava_cached_num = 0;
 		psr->first_14_byte_cache_is_full   = 0;
 
@@ -58,28 +61,23 @@ int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 
 int idpi_tns_print_header(idpi_tns_parser_t *psr)
 {
-    printf("**********************************************************************************\n");
+    printf("**********************************************\n");
     printf("idpi_tns_parser_t print:\n");
+    printf("*	psr->buf_num %u\n", psr->buf_num);
     printf("*	psr->parse_state %u\n", psr->parse_state);
-
     printf("*	psr->tns_version %u\n", psr->tns_version);
     printf("*	psr->content_type %u\n", psr->content_type);
     printf("*	psr->direction %u\n", psr->direction);
     printf("*	psr->tns_pkt_length %u\n", psr->tns_pkt_length);
     printf("*	psr->pktbuf_left %u\n", psr->pktbuf_left);
-
     printf("*	psr->skip_flag %u\n", psr->skip_flag);
-
     printf("*	psr->response_needed %u\n", psr->response_needed);
-
     printf("*	psr->wait_for_request %u\n", psr->wait_for_request);
     printf("*	psr->wait_for_response %u\n", psr->wait_for_response);
     printf("*	psr->wait_for_header %u\n", psr->wait_for_header);
-
     printf("*	psr->first_14_byte_cache_is_full %u\n", psr->first_14_byte_cache_is_full);
     printf("*	psr->first_14_byte_hava_cached_num %u\n", psr->first_14_byte_hava_cached_num);
-
-    printf("**********************************************************************************\n");
+    printf("**********************************************\n");
 
     return 0;
 }
@@ -165,23 +163,23 @@ int idpi_tns_parse_skip_unconcerned_configure(idpi_tns_parser_t *psr)
 		else
 			psr->skip_left = psr->tns_pkt_length - TNE_HEADER_LENGTH;
 
-		printf("psr->skip_left is %u\n", psr->skip_left);
-		printf("psr->pktbuf_left is %u\n", psr->pktbuf_left);
+		//printf("psr->skip_left is %u\n", psr->skip_left);
+		//printf("psr->pktbuf_left is %u\n", psr->pktbuf_left);
 		if(psr->pktbuf_left >= psr->skip_left)
-		{printf("11111111111111111111111\n");
+		{
 			psr->pktbuf_left -= psr->skip_left;
 			psr->pktbuf_curr += psr->skip_left;
 			psr->skip_left = 0;
 			//printf("psr->pktbuf_left > psr->skip_left\n");
 		}
 		else
-		{printf("22222222222222222222\n");
+		{
 			//printf("psr->pktbuf_left <= psr->skip_left\n");
 			psr->skip_left -= psr->pktbuf_left;
 			psr->pktbuf_left = 0;
 			psr->skip_flag = 1;
 		}
-		printf("psr->skip_left is %u\n", psr->skip_left);
+		//printf("psr->skip_left is %u\n", psr->skip_left);
 	}
 
 	idpi_tns_print_pktbuf_curr_shift(psr);
@@ -350,7 +348,7 @@ int idpi_tns_parse_header(idpi_tns_parser_t *psr)
 	{
 		if(psr->first_14_byte_hava_cached_num >= TNS_HEADER_LENGTH)
 		{
-			printf("idpi_tns_parse_header in cached_block\n");
+			//printf("idpi_tns_parse_header in cached_block\n");
 			unsigned char *tmp_cache_block = psr->first_14_byte_cache_block;
 			psr->tns_pkt_length = tmp_cache_block[0] << 8;
 		    psr->tns_pkt_length += tmp_cache_block[1];
@@ -371,7 +369,7 @@ int idpi_tns_parse_header(idpi_tns_parser_t *psr)
 		}
 		else
 		{
-			printf("idpi_tns_parse_header in buffer\n");
+			//printf("idpi_tns_parse_header in buffer\n");
 
 			unsigned char *parser_cursor = psr->pktbuf_curr;
 	    
@@ -399,22 +397,42 @@ int idpi_tns_parse_header(idpi_tns_parser_t *psr)
     return 0;
 }
 
+int idpi_tns_parse_right_start(idpi_tns_parser_t* psr, uint8_t direction)
+{
+	if(psr)
+	{
+		if(psr->buf_num == 0)
+			psr->first_buf_direction = direction;
+		else if((psr->first_buf_direction != direction) && (psr->parse_start == 0))
+			psr->parse_start = 1;
+		else
+			return 0;
+	}
+	else
+		return -1;
+
+	return 0;
+}
+
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction)
 {
-    printf("##################################################################################\n");
+	idpi_tns_parse_right_start(tns_flow_ptr, direction);
+    printf("##############################################\n");
+    
 	int ret = -1;
 	idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
     psr->direction = direction;
     idpi_tns_state_e tmp_parse_state = psr->parse_state;
     //assert(psr);
+    psr->buf_num++;
     psr->pktbuf_init = buf;
     psr->pktbuf_curr = buf;
     psr->pktbuf_left = buf_len;
 
-    printf("psr->pktbuf_curr1 is %p\n", psr->pktbuf_curr);
-	printf("psr->pktbuf_left1 is %u\n", psr->pktbuf_left);
+    //printf("psr->pktbuf_curr1 is %p\n", psr->pktbuf_curr);
+	//printf("psr->pktbuf_left1 is %u\n", psr->pktbuf_left);
 
-    while(psr->pktbuf_left > 0)
+    while((psr->pktbuf_left > 0) && (psr->parse_start == 1))
     {
 	    if((psr->wait_for_response == 1) || (psr->wait_for_response == 1))
 	    {
@@ -597,7 +615,7 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 }
 
 int main()
-{
+{	
 	printf("**********************************************************************************\n");
 	printf("**********************************************************************************\n");
 	printf("**********************************************************************************\n");
