@@ -5,9 +5,23 @@
 #include <assert.h>
 
 #include "tns_parse.h"
-#include "test_buffer.h"
+#include "test_buffer2.h"
 
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction);
+int idpi_tns_print_pktbuf_curr_shift(idpi_tns_parser_t *psr)
+{
+	uint32_t shift;
+	if(psr)
+	{
+		shift = psr->pktbuf_curr - psr->pktbuf_init;
+	}
+	else
+		return -1;
+
+	printf("idpi_tns_print_pktbuf_curr_shift is %u\n", shift);
+
+	return 0;
+}
 
 int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 {
@@ -15,6 +29,7 @@ int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 	{
 		psr->parse_state        = __IDPI_TNS_PARSE_STATE_INIT;
 		psr->response_needed    = 0;
+		psr->parse_state        = 0;
 		psr->direction          = 1;
 		psr->data_flag          = 0;
 		psr->id_subid           = 0;
@@ -22,9 +37,18 @@ int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 		psr->wait_for_header    = 0;
 		psr->wait_for_request   = 0;
 		psr->wait_for_response  = 0;
+		psr->pktbuf_left        = 0;
+		psr->skip_flag          = 0;
 		psr->first_14_byte_hava_cached_num = 0;
+		psr->first_14_byte_cache_is_full   = 0;
 
 		memset(psr->first_14_byte_cache_block, '\0', TNS_HEADER_AND_EXTENDED_LENGTH);
+		int i = 0;
+		for(i = 0; i < TNS_HEADER_AND_EXTENDED_LENGTH; i++)
+		{
+			printf("%x ", *(psr->first_14_byte_cache_block+i));
+		}
+		printf("\n");
 	}
 	else
 		return -1;
@@ -34,9 +58,30 @@ int idpi_tns_parse_flow_init(idpi_tns_parser_t *psr)
 
 int idpi_tns_print_header(idpi_tns_parser_t *psr)
 {
-        //printf("%d\n", psr->header_cache.type);
+    printf("**********************************************************************************\n");
+    printf("idpi_tns_parser_t print:\n");
+    printf("*	psr->parse_state %u\n", psr->parse_state);
 
-        return 0;
+    printf("*	psr->tns_version %u\n", psr->tns_version);
+    printf("*	psr->content_type %u\n", psr->content_type);
+    printf("*	psr->direction %u\n", psr->direction);
+    printf("*	psr->tns_pkt_length %u\n", psr->tns_pkt_length);
+    printf("*	psr->pktbuf_left %u\n", psr->pktbuf_left);
+
+    printf("*	psr->skip_flag %u\n", psr->skip_flag);
+
+    printf("*	psr->response_needed %u\n", psr->response_needed);
+
+    printf("*	psr->wait_for_request %u\n", psr->wait_for_request);
+    printf("*	psr->wait_for_response %u\n", psr->wait_for_response);
+    printf("*	psr->wait_for_header %u\n", psr->wait_for_header);
+
+    printf("*	psr->first_14_byte_cache_is_full %u\n", psr->first_14_byte_cache_is_full);
+    printf("*	psr->first_14_byte_hava_cached_num %u\n", psr->first_14_byte_hava_cached_num);
+
+    printf("**********************************************************************************\n");
+
+    return 0;
 }
 
 uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint16_t flag2, uint16_t flag3)
@@ -94,7 +139,7 @@ int idpi_tns_parse_skip_unconcerned_packet_buf(idpi_tns_parser_t *psr)
 				psr->skip_flag = 0;
 			} 
 			else
-			{
+			{	
 				psr->skip_left -= psr->pktbuf_left;
 				psr->pktbuf_left = 0;
 				psr->skip_flag = 1;
@@ -103,7 +148,7 @@ int idpi_tns_parse_skip_unconcerned_packet_buf(idpi_tns_parser_t *psr)
 	}
 	else
 		return -1;
-
+	idpi_tns_print_pktbuf_curr_shift(psr);
 	return 0;
 }
 
@@ -112,22 +157,34 @@ int idpi_tns_parse_skip_unconcerned_configure(idpi_tns_parser_t *psr)
 {
 	if(psr)
 	{
-		psr->skip_left = psr->tns_pkt_length - TNE_HEADER_LENGTH;
-
-		if(psr->pktbuf_left >= psr->skip_left)
+		
+		if(psr->first_14_byte_cache_is_full == 1)
 		{
+			psr->skip_left = psr->tns_pkt_length - TNS_HEADER_AND_EXTENDED_LENGTH;
+		}
+		else
+			psr->skip_left = psr->tns_pkt_length - TNE_HEADER_LENGTH;
+
+		printf("psr->skip_left is %u\n", psr->skip_left);
+		printf("psr->pktbuf_left is %u\n", psr->pktbuf_left);
+		if(psr->pktbuf_left >= psr->skip_left)
+		{printf("11111111111111111111111\n");
 			psr->pktbuf_left -= psr->skip_left;
 			psr->pktbuf_curr += psr->skip_left;
+			psr->skip_left = 0;
 			//printf("psr->pktbuf_left > psr->skip_left\n");
 		}
 		else
-		{
+		{printf("22222222222222222222\n");
 			//printf("psr->pktbuf_left <= psr->skip_left\n");
 			psr->skip_left -= psr->pktbuf_left;
 			psr->pktbuf_left = 0;
 			psr->skip_flag = 1;
 		}
+		printf("psr->skip_left is %u\n", psr->skip_left);
 	}
+
+	idpi_tns_print_pktbuf_curr_shift(psr);
 
 	return 0;
 }
@@ -148,6 +205,7 @@ int idpi_tns_parse_payload_connect(idpi_tns_parser_t *psr)
 {
 	if(psr)
 	{
+		printf("idpi_tns_parse_payload_connect\n");
 		idpi_tns_parse_skip_unconcerned_configure(psr);
 	}
 	else
@@ -178,13 +236,13 @@ int idpi_tns_cache_header_and_extend(idpi_tns_parser_t *psr, unsigned char *buf,
 	if(psr)
 	{
 		uint32_t cached_num = psr->first_14_byte_hava_cached_num;
-		char *copyinit = psr->first_14_byte_cache_block + cached_num;
+		unsigned char *copyinit = psr->first_14_byte_cache_block + cached_num;
 
 		memcpy(copyinit, buf, buf_len);
 		psr->first_14_byte_hava_cached_num += buf_len;
 		cached_num += buf_len;
-		psr->pktbuf_left -= buf_len;
-
+		//psr->pktbuf_left -= buf_len;
+		printf("cached_num is %u\n", cached_num);
 		int i = 0;
 		for(i = 0; i < cached_num; i++)
 		{
@@ -203,7 +261,7 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 {
 	//TODO
 	if(psr)
-	{
+	{//entry psr psr->pktbuf_curr should point to payload
 		if((psr->direction == 1) && (psr->response_needed == 1))
 		{
 			unsigned char *parser_cursor = psr->pktbuf_curr + 2;
@@ -286,14 +344,14 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t *psr)
 }
 
 int idpi_tns_parse_header(idpi_tns_parser_t *psr)
-{
+{//do not change psr->pktbuf_curr
     //TODO
 	if(psr)
 	{
 		if(psr->first_14_byte_hava_cached_num >= TNS_HEADER_LENGTH)
 		{
 			printf("idpi_tns_parse_header in cached_block\n");
-			char *tmp_cache_block = psr->first_14_byte_cache_block;
+			unsigned char *tmp_cache_block = psr->first_14_byte_cache_block;
 			psr->tns_pkt_length = tmp_cache_block[0] << 8;
 		    psr->tns_pkt_length += tmp_cache_block[1];
 		    psr->content_type = (idpi_tns_content_type_e )tmp_cache_block[4];
@@ -314,6 +372,7 @@ int idpi_tns_parse_header(idpi_tns_parser_t *psr)
 		else
 		{
 			printf("idpi_tns_parse_header in buffer\n");
+
 			unsigned char *parser_cursor = psr->pktbuf_curr;
 	    
 		    psr->tns_pkt_length = parser_cursor[0] << 8;
@@ -342,7 +401,7 @@ int idpi_tns_parse_header(idpi_tns_parser_t *psr)
 
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction)
 {
-    
+    printf("##################################################################################\n");
 	int ret = -1;
 	idpi_tns_parser_t *psr = (idpi_tns_parser_t *)tns_flow_ptr;
     psr->direction = direction;
@@ -351,6 +410,10 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
     psr->pktbuf_init = buf;
     psr->pktbuf_curr = buf;
     psr->pktbuf_left = buf_len;
+
+    printf("psr->pktbuf_curr1 is %p\n", psr->pktbuf_curr);
+	printf("psr->pktbuf_left1 is %u\n", psr->pktbuf_left);
+
     while(psr->pktbuf_left > 0)
     {
 	    if((psr->wait_for_response == 1) || (psr->wait_for_response == 1))
@@ -359,16 +422,16 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 	    }
 	    else if(psr->wait_for_header == 1)
 	    {
-	    	uint8_t tmp_cached_num = psr->first_14_byte_hava_cached_num;
+	    	psr->first_14_byte_last_cached_num = TNS_HEADER_AND_EXTENDED_LENGTH - psr->first_14_byte_hava_cached_num;
 	    	//TODO wait for next buffer header
 	    	if(psr->pktbuf_left + psr->first_14_byte_hava_cached_num >= TNS_HEADER_AND_EXTENDED_LENGTH)
 	    	{
 	    		psr->wait_for_header =0;
 
-	    		idpi_tns_cache_header_and_extend(psr, buf, TNS_HEADER_AND_EXTENDED_LENGTH - tmp_cached_num);
+	    		idpi_tns_cache_header_and_extend(psr, buf, psr->first_14_byte_last_cached_num);
+
 	    		psr->first_14_byte_cache_is_full = 1;
-	    		psr->pktbuf_left -= (TNS_HEADER_AND_EXTENDED_LENGTH - psr->first_14_byte_hava_cached_num);
-	    		psr->pktbuf_curr += (TNS_HEADER_AND_EXTENDED_LENGTH - psr->first_14_byte_hava_cached_num);
+	    		printf("wait_for_header == 1 & NOW IS header is full, psr->wait_for_header =0\n");
 			}
 			else
 			{
@@ -376,8 +439,9 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 		    	{
 		    		idpi_tns_cache_header_and_extend(psr, buf, buf_len);
 			    	idpi_tns_parse_header(psr);
-			    	psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
-			        //psr->pktbuf_left -= TNE_HEADER_LENGTH;
+			    	//->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
+			        psr->pktbuf_left -= buf_len;
+
 			        if(psr->content_type == TNS_TYPE_RESEND)//parse resend
 			        {
 			        	printf("wait_for_header == 1 & TNS_TYPE_RESEND\n");
@@ -389,7 +453,8 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 			        }
 			    }
 			    else
-			    {
+			    {	
+			    	psr->pktbuf_left -= buf_len;
 			    	idpi_tns_cache_header_and_extend(psr, buf, buf_len);
 			    	//psr->parse_state = __IDPI_TNS_PARSE_STATE_WAIT_FOR_HEADER;
 			    	printf("wait_for_header == 1 & NOW IS __IDPI_TNS_PARSE_STATE_WAIT_FOR_HEADER2\n");
@@ -400,7 +465,7 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 	    {
 		    //while(psr->pktbuf_left >= psr->first_14_byte_left)
 	    	if(psr->skip_flag == 1)
-		    {
+		    {	
 		    	idpi_tns_parse_skip_unconcerned_packet_buf(psr);//skip the whole remain of the packet
 		    	psr->skip_flag = 0;
 		    }
@@ -409,13 +474,24 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 		    	if((psr->pktbuf_left >= TNS_HEADER_AND_EXTENDED_LENGTH) || psr->first_14_byte_cache_is_full == 1)
 			    {
 			        if(!idpi_tns_parse_header(psr))
-			        {
-			        	psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
-			        	psr->pktbuf_left -= TNE_HEADER_LENGTH; /* skip header*/
+			        {	
+			        	if(psr->first_14_byte_cache_is_full == 0)
+			        	{
+			        		psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
+							psr->pktbuf_left -= TNE_HEADER_LENGTH; /* skip header*/
+			        	}
+			        	else
+			        	{printf("psr->pktbuf_left is %u\n", psr->pktbuf_left);
+			        		psr->pktbuf_left -= psr->first_14_byte_last_cached_num;
+	   						psr->pktbuf_curr += psr->first_14_byte_last_cached_num;
+	   						printf("psr->first_14_byte_last_cached_num is %u\n", psr->first_14_byte_last_cached_num);
+			        	}
+
 			        	switch(psr->content_type)
 			        	{
 			        		case TNS_TYPE_CONNECT:
 			        			printf("TNS_TYPE_CONNECT\n");
+			        			idpi_tns_print_pktbuf_curr_shift(psr);
 			        			ret = idpi_tns_parse_payload_connect(psr);
 			        			if(ret != -1)
 			        			{
@@ -426,6 +502,7 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 
 			        		case TNS_TYPE_ACCEPT:
 			        			printf("TNS_TYPE_ACCEPT\n");
+			        			idpi_tns_print_pktbuf_curr_shift(psr);
 			        			ret = idpi_tns_parse_payload_accept(psr);
 			        			if(ret != -1)
 			        			{
@@ -435,6 +512,7 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 			        			break;
 			        		case TNS_TYPE_DATA:
 			        			printf("TNS_TYPE_DATA\n");
+			        			idpi_tns_print_pktbuf_curr_shift(psr);
 			        			idpi_tns_parse_payload_data(psr);
 			        			break;
 
@@ -466,8 +544,16 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 			        			break;
 
 			        		case TNS_TYPE_REDIRECT:
-			        			break;*/		        			
+			        			break;*/
+	        			
 			        	}
+
+			        	if(psr->first_14_byte_cache_is_full == 1)
+		        		{
+		        			psr->first_14_byte_cache_is_full = 0;
+		        			psr->first_14_byte_hava_cached_num = 0;
+		        			memset(psr->first_14_byte_cache_block, '\0', TNS_HEADER_AND_EXTENDED_LENGTH - 1);
+		        		}
 			        }
 			    }
 			    else
@@ -476,17 +562,17 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 			    	if(psr->pktbuf_left >= TNS_HEADER_LENGTH)
 			    	{
 				    	idpi_tns_parse_header(psr);
-				    	psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
-				        psr->pktbuf_left -= TNE_HEADER_LENGTH;
 				        if(psr->content_type == TNS_TYPE_RESEND)//parse resend
 				        {
 				        	printf("TNS_TYPE_RESEND\n");
+				        	psr->pktbuf_curr += TNE_HEADER_LENGTH; /* skip header*/
+				        	psr->pktbuf_left -= TNE_HEADER_LENGTH;
 				        	idpi_tns_parse_payload_resend(psr);
 				        }
 				        else
 				        {
 				        	psr->wait_for_header = 1;
-				        	psr->pktbuf_left += TNE_HEADER_LENGTH;
+				        	psr->pktbuf_left -= buf_len;
 				        	idpi_tns_cache_header_and_extend(psr, buf, buf_len);
 				        	printf("NOW IS wait_for_header1\n");
 				        }
@@ -494,28 +580,46 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
 				    else
 				    {
 				    	psr->wait_for_header = 1;
+				    	psr->pktbuf_left -= buf_len;
 				    	idpi_tns_cache_header_and_extend(psr, buf, buf_len);
 				        printf("NOW IS wait_for_header2\n");
 				    }
 			    }
-		    }    
+		    }   
 	    }
+	    
     }
-    printf("Buffer is empty & there`s no new buffer\n");
-    printf("*************************\n");
+    printf("Buffer is empty & wait for next buffer\n");
     
-    //idpi_tns_print_header(psr);
+    idpi_tns_print_header(psr);
+
     return 0;
 }
 
 int main()
 {
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
+	printf("**********************************************************************************\n");
 	idpi_tns_parser_t *ptr = (idpi_tns_parser_t*)malloc(sizeof(idpi_tns_parser_t));
 	
 	idpi_tns_parse_flow_init(ptr);
 
-	/*int i =0;
-	for(i = 0; i < BUFFER_NUM; i++)
+	//printf("buf_smallbuf2_len is %u\n", buf_smallbuf2_len);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf1, buf_smallbuf1_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf2, buf_smallbuf2_len, 1);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf3, buf_smallbuf3_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf4, buf_smallbuf4_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf5, buf_smallbuf5_len, 0);
+	idpi_tns_parse_processing(ptr, (void *)smallbuf6, buf_smallbuf6_len, 1);
+
+	int i =0;
+	for(i = 4; i < BUFFER_NUM; i++)
 	{
 		if(i%2 == 0)
 		{
@@ -527,11 +631,8 @@ int main()
 		}
 		//buf_len = ((sizeof paste(buf, i)) / (sizeof (unsigned char)));
 		//printf("buf_len is %u \n", buf_len[i]);
-	}*/
-	printf("buf_smallbuf1_len is %u\n", buf_smallbuf1_len);
-	//printf("buf_smallbuf2_len is %u\n", buf_smallbuf2_len);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf1, buf_smallbuf1_len, 0);
-	idpi_tns_parse_processing(ptr, (void *)smallbuf2, buf_smallbuf2_len, 0);
+	}
+
 	free(ptr);
 
 	return 0;

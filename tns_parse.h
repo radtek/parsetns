@@ -89,8 +89,9 @@ typedef struct
 
 	uint8_t first_14_byte_cache_is_full;//1:used
 	uint8_t first_14_byte_hava_cached_num;
+	uint8_t first_14_byte_last_cached_num;
 	//unsigned char *first_14_byte_curr;
-	char first_14_byte_cache_block[TNS_HEADER_AND_EXTENDED_LENGTH-1];//to cache firsr 12 byte 
+	unsigned char first_14_byte_cache_block[TNS_HEADER_AND_EXTENDED_LENGTH-1];//to cache firsr 12 byte 
 
     uint16_t data_flag;
     uint16_t id_subid;
