@@ -2,9 +2,12 @@
 #define TNS_HEADER_LENGTH 8
 #define TNS_USER_NAME_LENGTH_MAX 100
 #define TNE_HEADER_LENGTH 8
+#define TNS_LOG_BUFFER_MAXE_LENGTH 180
+
 #define BUFFER_NUM 11
 
-#define paste(front, back) front ## back
+#define LOG_LENGTH_MAX 
+
 
 typedef struct 
 {
@@ -34,10 +37,10 @@ typedef enum
 
 typedef enum
 {
-    TNS_VERSION_312 = 1,
-	TNS_VERSION_313 ,
-	TNS_VERSION_314 ,
-	TNS_VERSION_315 ,
+    TNS_VERSION_312 = 312,
+	TNS_VERSION_313 = 313,
+	TNS_VERSION_314 = 314,
+	TNS_VERSION_315 = 315,
 }idpi_tns_version_e;
 
 typedef enum
@@ -82,11 +85,11 @@ typedef struct
 	uint8_t first_buf_direction;  
 	uint8_t parse_start;
     uint8_t direction;//0:request 1:response
-//    uint16_t client_port;
-//    uint16_t server_port;
-//  uint32_t segment_count; /*log segment number*/
- //   uint32_t client_ip;
- //   uint32_t server_ip;
+	
+	uint16_t client_port;
+	uint16_t server_port;
+	uint32_t client_ip;
+	uint32_t server_ip;
 
 	uint16_t tns_pkt_length; /*bytes to read in pkt buffer*/
     uint8_t payload_data_type;
@@ -94,12 +97,13 @@ typedef struct
 	uint8_t first_14_byte_cache_is_full;//1:used
 	uint8_t first_14_byte_hava_cached_num;
 	uint8_t first_14_byte_last_cached_num;
-	//unsigned char *first_14_byte_curr;
-	unsigned char first_14_byte_cache_block[TNS_HEADER_AND_EXTENDED_LENGTH-1];//to cache firsr 12 byte 
+	unsigned char first_14_byte_cache_block[TNS_HEADER_AND_EXTENDED_LENGTH-1];//to cache firsr 14 byte 
 
     uint16_t data_flag;
     uint16_t id_subid;
     uint16_t id_subid_extended;
+    uint16_t magicshift_to_skip;
+    uint16_t magicshift;
 
     uint32_t pktbuf_left; /*bytes to read in pkt buffer*/
     unsigned char *pktbuf_curr; /*next addr to read in pkt buffer*/
@@ -113,14 +117,11 @@ typedef struct
 	uint8_t wait_for_request;
 	uint8_t wait_for_response;
 	
-	//uint32_t content_left; /*remaining bytes of message-body to read*/
-    //uint32_t content_current; /*remaining bytes of message-body to read*/
-	//hili_send_packet_conf_t send_conf;
-    //char *response_header[TNS_HEADER_LENGTH-1]; /*restore the current header */
-    //char *logbuf_start; /*start addr of log buffer*/
-    //char *logbuf_curr; /*next addr to write in log buffer*/ 
-	//uint8_t response_parse_falg;/*flag:1 response need to be parse*/
-	//uint8_t wait_for_next_buffer;/*1:wait for next buffer*/
+    uint16_t data_to_buff_left;
+    unsigned char *logbuf_start; /*start addr of log buffer*/
+    unsigned char *logbuf_curr; /*next addr to write in log buffer*/ 
+    uint8_t logging_flag;
+    uint32_t segment_count;
 }idpi_tns_parser_t;
 
 
@@ -141,3 +142,23 @@ int idpi_tns_parse_right_start(idpi_tns_parser_t* psr, uint8_t direction);
 
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction);
 
+#define TNS_312_PARSE
+#define TNS_313_PARSE
+#define TNS_314_PARSE
+#define TNS_315_PARSE
+
+#ifdef TNS_312_PARSE
+#include "tns_312.h"
+#endif
+
+#ifdef TNS_313_PARSE
+#include "tns_313.h"
+#endif
+
+#ifdef TNS_314_PARSE
+#include "tns_314.h"
+#endif
+
+#ifdef TNS_315_PARSE
+#include "tns_315.h"
+#endif
