@@ -1,4 +1,4 @@
-#define IDPI_TNS_MEMO_LEN_LIMIT 60
+#define IDPI_TNS_MEMO_LEN_LIMIT 2048
 
 #define DIR_REQUEST 0
 #define DIR_RESPONSE 1
@@ -6,13 +6,14 @@
 #define WAIT_FOR_BUFFER 1
 #define MESSAGE_IS_COMPLETE 0
 
+//#define HILI_DEBUG
+
 enum 
 {
-    error = -1, 
-    true = 1,
+    ERROR = -1, 
+    COMPLETE = 0,
 };
 
-//#define HILI_DEBUG
 typedef enum
 {
     TNS_TYPE_CONNECT = 1,
@@ -32,23 +33,22 @@ typedef enum
 
 static char *content_type_array[] = 
 {
-    NULL,
+    "",
     "TNS_TYPE_CONNECT ", 
     "TNS_TYPE_ACCEPT", 
-    "TNS_TYPE_ACK",
-    "TNS_TYPE_CONNECT ", 
+    "TNS_TYPE_ACK", 
     "TNS_TYPE_REFUSE", 
-    "TNS_TYPE_REDIRECT"
+    "TNS_TYPE_REDIRECT",
     "TNS_TYPE_DATA", 
     "TNS_TYPE_NULL",
-    NULL, 
+    "",
     "TNS_TYPE_ABORT", 
-    NULL,
+    "",
     "TNS_TYPE_RESEND ", 
     "TNS_TYPE_MARKER", 
     "TNS_TYPE_ATTENTION ", 
     "TNS_TYPE_CONTROL", 
-    NULL, NULL, NULL, NULL, 
+    "", "", "", "", 
     "TNS_TYPE_MAX "
 };
 
@@ -59,13 +59,6 @@ typedef enum
     TNS_VERSION_314 = 314,
     TNS_VERSION_315 = 315,
 }idpi_tns_version_e;
-
-static char *version_array[] = 
-{
-    "TNS_VERSION_312 ", 
-    "TNS_VERSION_313", 
-    "TNS_VERSION_314"
-};
 
 typedef enum
 {
@@ -114,20 +107,21 @@ typedef struct
 	uint16_t tns_pkt_length; /*bytes to read in pkt buffer*/
 
     uint32_t pktbuf_left; /*bytes to read in pkt buffer*/
-    unsigned char *pktbuf_curr; /*next addr to read in pkt buffer*/
-	unsigned char *pktbuf_init; /*initial addr to read in pkt buffer*/
+    uint8_t *pktbuf_curr; /*next addr to read in pkt buffer*/
+	uint8_t *pktbuf_init; /*initial addr to read in pkt buffer*/
 
-    unsigned char *logbuf_start; /*start addr of log buffer*/
-    unsigned char *logbuf_curr; /*next addr to write in log buffer*/ 
+    uint8_t *logbuf_start; /*start addr of log buffer*/
+    uint8_t *logbuf_curr; /*next addr to write in log buffer*/ 
     uint8_t logging_flag;
     uint32_t segment_count;
 
-    uint8_t curr_note;
-    unsigned char *notep; /*current pos in current note*/
-    unsigned char main_notes[IDPI_TNS_MEMO_LEN_LIMIT]; /*memo*/
-#define IDPI_TNS_NUM_BACKUP_NOTES 8
-    unsigned char *backup_notes[IDPI_TNS_NUM_BACKUP_NOTES];
+    uint8_t curr_cache_block;
+    uint8_t *cache_block_p; /*current pos in current note*/
+    uint8_t main_cache_block[IDPI_TNS_MEMO_LEN_LIMIT]; /*memo*/
+#define IDPI_TNS_NUM_BACKUP_CACHE_BLOCK 8
+    uint8_t *backup_cache_block[IDPI_TNS_NUM_BACKUP_CACHE_BLOCK];
     uint32_t cached_num;
+    uint32_t curr_cache_block_left;
 }idpi_tns_parser_t;
 
 typedef struct{
