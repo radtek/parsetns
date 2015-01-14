@@ -1,4 +1,6 @@
-#define IDPI_TNS_MEMO_LEN_LIMIT 2048
+#define IDPI_TNS_MEMO_LEN_LIMIT 1800
+
+#define USERNAME_MAX_LENGTH 100
 
 #define DIR_REQUEST 0
 #define DIR_RESPONSE 1
@@ -12,6 +14,12 @@ enum
 {
     ERROR = -1, 
     COMPLETE = 0,
+};
+
+enum 
+{
+    SET = 1, 
+    UNSET = 0,
 };
 
 typedef enum
@@ -83,12 +91,24 @@ typedef enum
     __IDPI_TNS_PARSE_STATE_CONNECTED , //
     __IDPI_TNS_PARSE_STATE_REDIRECTED , //
     __IDPI_TNS_PARSE_STATE_ERROR_MARKER , //
-    __IDPI_TNS_PARSE_STATE_REQUESTING , //
+    //__IDPI_TNS_PARSE_STATE_REQUESTING , //
     __IDPI_TNS_PARSE_STATE_REQUESTED , //
-    __IDPI_TNS_PARSE_STATE_RESPONDING , //
+    //__IDPI_TNS_PARSE_STATE_RESPONDING , //
     __IDPI_TNS_PARSE_STATE_RESPONDED , //
-    //__IDPI_TNS_PARSE_STATE_SKIPING ,
+    __IDPI_TNS_PARSE_STATE_REFUSED ,
 }idpi_tns_state_e;
+
+static char *parse_state_array[] = 
+{
+    "__IDPI_TNS_PARSE_STATE_INIT",
+    "__IDPI_TNS_PARSE_STATE_CONNECTING ", 
+    "__IDPI_TNS_PARSE_STATE_CONNECTED", 
+    "__IDPI_TNS_PARSE_STATE_REDIRECTED", 
+    "__IDPI_TNS_PARSE_STATE_ERROR_MARKER", 
+    "__IDPI_TNS_PARSE_STATE_REQUESTED",
+    "__IDPI_TNS_PARSE_STATE_RESPONDED", 
+    "__IDPI_TNS_PARSE_STATE_REFUSED"
+};
 
 typedef struct
 {
@@ -115,8 +135,10 @@ typedef struct
     uint8_t logging_flag;
     uint32_t segment_count;
 
+    uint8_t *username[USERNAME_MAX_LENGTH];
+
     uint8_t curr_cache_block;
-    uint8_t *cache_block_p; /*current pos in current note*/
+    uint8_t *cache_block_p; /*start p of current block*/
     uint8_t main_cache_block[IDPI_TNS_MEMO_LEN_LIMIT]; /*memo*/
 #define IDPI_TNS_NUM_BACKUP_CACHE_BLOCK 8
     uint8_t *backup_cache_block[IDPI_TNS_NUM_BACKUP_CACHE_BLOCK];
