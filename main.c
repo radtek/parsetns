@@ -86,22 +86,33 @@ void idpi_tns_context_init(idpi_tns_parser_t *tns_flow_ptr)
     ptr->parse_state = __IDPI_TNS_PARSE_STATE_INIT;
     //ptr->content_encoding = NULL;
     //ptr->chunked_encoding = 0;
-    ptr->logging_flag = 0;
     ptr->tns_version = 0;
 
     int i;
-    for (i = 1; i < IDPI_TNS_NUM_BACKUP_CACHE_BLOCK; ++i)
+    for(i = 0; i < IDPI_TNS_MAX_NUM_CACHE_BLOCK; ++i)
     {
-        if (ptr->backup_cache_block[i])
+        if(ptr->request_cache_block_p[i])
         {
-            idpi_tns_free_memo(ptr->backup_cache_block[i]); 
-            ptr->backup_cache_block[i] = NULL;
+            idpi_tns_free_memo(ptr->request_cache_block_p[i]); 
+            ptr->request_cache_block_p[i] = NULL;
+        }
+
+        if(ptr->response_cache_block_p[i])
+        {
+            idpi_tns_free_memo(ptr->response_cache_block_p[i]); 
+            ptr->response_cache_block_p[i] = NULL;
         }
     }
-    ptr->backup_cache_block[0] = ptr->main_cache_block;
-    ptr->cache_block_p = ptr->main_cache_block;
-    ptr->curr_cache_block = 0;
-    ptr->curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
+
+    ptr->request_cache_block_p[ptr->request_curr_cache_block] = idpi_tns_alloc_memo();
+    ptr->request_curr_cache_block = 0;
+    ptr->request_cached_num = 0;
+    ptr->request_curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
+
+    ptr->response_cache_block_p[ptr->response_curr_cache_block] = idpi_tns_alloc_memo();
+    ptr->response_curr_cache_block = 0;
+    ptr->response_cached_num = 0;    
+    ptr->response_curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
 }
 
 void* idpi_tns_parse_flow_init()//tns_parse_flow_conf_t *conf)
@@ -123,7 +134,8 @@ void* idpi_tns_parse_flow_init()//tns_parse_flow_conf_t *conf)
     ptr->client_port = conf->cli_port;
     ptr->server_port = conf->srv_port;*/ 
 
-    memset(ptr->backup_cache_block, 0, sizeof(ptr->backup_cache_block));
+    memset(ptr->request_cache_block_p, 0, sizeof(ptr->request_cache_block_p));
+    memset(ptr->response_cache_block_p, 0, sizeof(ptr->response_cache_block_p));
     idpi_tns_context_init(ptr);
 
     return (void*)ptr;
@@ -153,19 +165,27 @@ int idpi_tns_parse_free_backup_cache_block(idpi_tns_parser_t* tns_flow_ptr)
     if(ptr)
     {
         int i;
-        for(i = 1; i < IDPI_TNS_NUM_BACKUP_CACHE_BLOCK; ++i)
+        for(i = 1; i < IDPI_TNS_MAX_NUM_CACHE_BLOCK; ++i)
         {
-            if(ptr->backup_cache_block[i])
+            if(ptr->request_cache_block_p[i])
             {
-                idpi_tns_free_memo(ptr->backup_cache_block[i]);
-                ptr->backup_cache_block[i] = NULL;
+                idpi_tns_free_memo(ptr->request_cache_block_p[i]);
+                ptr->request_cache_block_p[i] = NULL;
+            }
+            if(ptr->response_cache_block_p[i])
+            {
+                idpi_tns_free_memo(ptr->response_cache_block_p[i]);
+                ptr->response_cache_block_p[i] = NULL;
             }
         }
-        ptr->backup_cache_block[0] = ptr->main_cache_block;
-        ptr->cache_block_p = ptr->main_cache_block;
-        ptr->curr_cache_block = 0;
-        ptr->cached_num = 0;
-        ptr->curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
+
+        ptr->request_curr_cache_block = 0;
+        ptr->request_cached_num = 0;
+        ptr->request_curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
+
+        ptr->response_curr_cache_block = 0;
+        ptr->response_cached_num = 0;    
+        ptr->response_curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
     }
 
     return COMPLETE;
@@ -177,86 +197,127 @@ int idpi_tns_parse_cache_message(idpi_tns_parser_t* tns_flow_ptr)
    
 	if(ptr)
 	{
-        uint32_t curr_cached_num = IDPI_TNS_MEMO_LEN_LIMIT - ptr->curr_cache_block_left;
-		if(ptr->pktbuf_left >= ptr->curr_cache_block_left)
+        uint32_t cached_num;
+        uint32_t curr_cached_num;
+        uint32_t curr_cache_block_left;
+        uint8_t **cache_block_p;
+        uint8_t curr_cache_block;
+        
+        if(ptr->direction == DIR_REQUEST)
+        {
+            curr_cache_block_left = ptr->request_curr_cache_block_left;
+            cached_num            = ptr->request_cached_num;
+            cache_block_p         = ptr->request_cache_block_p;
+            curr_cache_block      = ptr->request_curr_cache_block;
+        }
+        else
+        {
+            curr_cache_block_left = ptr->response_curr_cache_block_left;
+            cached_num            = ptr->response_cached_num;
+            cache_block_p         = ptr->response_cache_block_p;
+            curr_cache_block      = ptr->response_curr_cache_block;
+        }
+
+        curr_cached_num = IDPI_TNS_MEMO_LEN_LIMIT - curr_cache_block_left;
+		if(ptr->pktbuf_left >= curr_cache_block_left)
 		{
-			ptr->cached_num += ptr->pktbuf_left;
+			cached_num += ptr->pktbuf_left;
 		
-			memcpy(ptr->cache_block_p + curr_cached_num, ptr->pktbuf_curr, ptr->curr_cache_block_left);
+			memcpy(cache_block_p[curr_cache_block] + curr_cached_num, ptr->pktbuf_curr, curr_cache_block_left);
 			ptr->pktbuf_curr += IDPI_TNS_MEMO_LEN_LIMIT;
    			ptr->pktbuf_left -= IDPI_TNS_MEMO_LEN_LIMIT;
 
 			while(ptr->pktbuf_left >= IDPI_TNS_MEMO_LEN_LIMIT)
 			{
-                ptr->curr_cache_block++;
+                curr_cache_block++;
                 
-                if(ptr->curr_cache_block == IDPI_TNS_NUM_BACKUP_CACHE_BLOCK)
+                if(curr_cache_block == IDPI_TNS_MAX_NUM_CACHE_BLOCK)
                 {
                     return ERROR;
                 }
                 
-	            if(ptr->backup_cache_block[ptr->curr_cache_block] == NULL)
+	            if(cache_block_p[curr_cache_block] == NULL)
 	            {
-	                ptr->backup_cache_block[ptr->curr_cache_block] = idpi_tns_alloc_memo();
-	                ptr->curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
-	                if(ptr->backup_cache_block[ptr->curr_cache_block] == NULL)
+	                cache_block_p[curr_cache_block] = idpi_tns_alloc_memo();
+	                curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
+	                if(cache_block_p[curr_cache_block] == NULL)
 	                {
                         printf("error\n");
 	                    return ERROR;//add error code
 	                }
 	            }
-	            ptr->cache_block_p = ptr->backup_cache_block[ptr->curr_cache_block];
 
-	            memcpy(ptr->cache_block_p, ptr->pktbuf_curr, IDPI_TNS_MEMO_LEN_LIMIT);
+	            memcpy(cache_block_p[curr_cache_block], ptr->pktbuf_curr, IDPI_TNS_MEMO_LEN_LIMIT);
 				ptr->pktbuf_curr += IDPI_TNS_MEMO_LEN_LIMIT;
 	   			ptr->pktbuf_left -= IDPI_TNS_MEMO_LEN_LIMIT;
 			}
 
-            ptr->curr_cache_block++;
+            curr_cache_block++;
             
-            if(ptr->backup_cache_block[ptr->curr_cache_block] == NULL)
+            if(cache_block_p[curr_cache_block] == NULL)
             {
-                ptr->backup_cache_block[ptr->curr_cache_block] = idpi_tns_alloc_memo();
-                ptr->curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
-                if(ptr->backup_cache_block[ptr->curr_cache_block] == NULL)
+                cache_block_p[curr_cache_block] = idpi_tns_alloc_memo();
+                curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
+                if(cache_block_p[curr_cache_block] == NULL)
                 {
                     return ERROR;//add error code
                 }
             }
-            ptr->cache_block_p = ptr->backup_cache_block[ptr->curr_cache_block];
 
-			memcpy(ptr->cache_block_p, ptr->pktbuf_curr, ptr->pktbuf_left);
-            ptr->curr_cache_block_left -= ptr->pktbuf_left;
+			memcpy(cache_block_p[curr_cache_block], ptr->pktbuf_curr, ptr->pktbuf_left);
+            curr_cache_block_left -= ptr->pktbuf_left;
 			ptr->pktbuf_left = 0;
 		}
 		else
 		{
-			memcpy(ptr->cache_block_p + curr_cached_num, ptr->pktbuf_curr, ptr->pktbuf_left);
-			ptr->cached_num += ptr->pktbuf_left;
-            ptr->curr_cache_block_left -= ptr->pktbuf_left;
+			memcpy(cache_block_p[curr_cache_block] + curr_cached_num, ptr->pktbuf_curr, ptr->pktbuf_left);
+			cached_num += ptr->pktbuf_left;
+            curr_cache_block_left -= ptr->pktbuf_left;
 			ptr->pktbuf_left = 0;
 		}
         
-        printf("ptr->curr_cache_block is %u\n", ptr->curr_cache_block);
+        printf("curr_cache_block is %u\n", curr_cache_block);
 
-		if(ptr->cached_num >= 8)
-		{
-			idpi_tns_parse_header(ptr);
+        if(cached_num >= 8)
+        {
+            idpi_tns_parse_header(ptr);
 
-			if(ptr->cached_num == ptr->tns_pkt_length)
-			{
-				ptr->wait_flag = MESSAGE_IS_COMPLETE;
-			}
-			else
-			{
-				ptr->wait_flag = WAIT_FOR_BUFFER;
-			}	
-		}
-		else
-		{
-			ptr->wait_flag = WAIT_FOR_BUFFER;
-		}
+            if(cached_num == ptr->tns_pkt_length)
+            {
+                ptr->wait_flag = MESSAGE_IS_COMPLETE;
+            }
+            else
+            {
+                ptr->wait_flag = WAIT_FOR_BUFFER;
+            }   
+        }
+        else
+        {
+            ptr->wait_flag = WAIT_FOR_BUFFER;
+        }
 
+        if(ptr->direction == DIR_REQUEST)
+        {
+            ptr->request_curr_cache_block_left = curr_cache_block_left;
+            ptr->request_cached_num            = cached_num;
+            ptr->request_curr_cache_block      = curr_cache_block;
+            int i;
+            for(i = 1; i <= curr_cache_block; i++)
+            {
+                ptr->request_cache_block_p[i] = cache_block_p[i];
+            }
+        }
+        else
+        {
+            ptr->response_curr_cache_block_left = curr_cache_block_left;
+            ptr->response_cached_num            = cached_num;
+            ptr->response_curr_cache_block      = curr_cache_block;
+            int i;
+            for(i = 1; i <= curr_cache_block; i++)
+            {
+                ptr->response_cache_block_p[i] = cache_block_p[i];
+            }
+        }
 	}
 	
 	return COMPLETE;
@@ -325,18 +386,28 @@ int idpi_tns_parse_state_switch(idpi_tns_parser_t* tns_flow_ptr)
 
 int idpi_tns_parse_header(idpi_tns_parser_t* tns_flow_ptr)
 {
+    uint8_t *main_cache_block;
     idpi_tns_parser_t *ptr = tns_flow_ptr;
 
-    ptr->tns_pkt_length = ptr->main_cache_block[0] << 8;
-    ptr->tns_pkt_length += ptr->main_cache_block[1];
+    if(ptr->direction == DIR_REQUEST)
+    {
+        main_cache_block = ptr->request_cache_block_p[0];
+    }
+    else
+    {
+        main_cache_block = ptr->response_cache_block_p[0];
+    }
 
-    ptr->content_type = (idpi_tns_content_type_e )ptr->main_cache_block[4];
+    ptr->tns_pkt_length = main_cache_block[0] << 8;
+    ptr->tns_pkt_length += main_cache_block[1];
+
+    ptr->content_type = (idpi_tns_content_type_e )main_cache_block[4];
 
     if(ptr->tns_pkt_length == 0) 
     {
         //tns 315
-        ptr->tns_pkt_length = ptr->main_cache_block[2]<<8;
-        ptr->tns_pkt_length += ptr->main_cache_block[3];
+        ptr->tns_pkt_length = main_cache_block[2]<<8;
+        ptr->tns_pkt_length += main_cache_block[3];
         
         return COMPLETE;
     }
@@ -360,11 +431,21 @@ int idpi_tns_parse_payload_connect(idpi_tns_parser_t* tns_flow_ptr)
 
 int idpi_tns_parse_payload_accept(idpi_tns_parser_t* tns_flow_ptr)
 {
+    uint8_t *main_cache_block;
     idpi_tns_parser_t *ptr = tns_flow_ptr;
+
+    if(ptr->direction == DIR_REQUEST)
+    {
+        main_cache_block = ptr->request_cache_block_p[0];
+    }
+    else
+    {
+        main_cache_block = ptr->response_cache_block_p[0];
+    }
 
     if(ptr != NULL && ptr->content_type == TNS_TYPE_ACCEPT)
     {
-        uint8_t *parser_cursor = ptr->main_cache_block + 8;
+        uint8_t *parser_cursor = main_cache_block + 8;
 
         ptr->tns_version = parser_cursor[0] << 8;
         ptr->tns_version += parser_cursor[1];
@@ -378,54 +459,24 @@ int idpi_tns_parse_payload_accept(idpi_tns_parser_t* tns_flow_ptr)
     return COMPLETE;
 }
 
-uint8_t idpi_tns_parse_payload_data_type(uint16_t flag1, uint16_t flag2, uint16_t flag3)
+uint8_t idpi_tns_parse_payload_data_type(idpi_tns_parser_t* tns_flow_ptr)
 {
     //TODO
-    uint16_t data_flag = flag1;
-    uint16_t id_subid  = flag2;
-    uint16_t id_subid_extended = flag3;
+    uint8_t *main_cache_block;
+    idpi_tns_parser_t *ptr = tns_flow_ptr;
 
-    if((data_flag == 0) && (id_subid == 0x1169) && (id_subid_extended == 0x1201))
+    if(ptr->direction == DIR_REQUEST)
     {
-        //TODO end fo connect client
-        printf("Payload is TNS_DATA_RESPONSE_CLOSE_SESSION\n"); 
-        return TNS_DATA_RESPONSE_CLOSE_SESSION;
-    }
-    else if((data_flag == 0) && (id_subid == 0x1169))
-    {
-        //TODO end of connect server
-        printf("Payload is TNS_DATA_SQL_COMMAND1\n");   
-        return TNS_DATA_SQL_COMMAND1;
-    }
-    else if((data_flag == 0) && (id_subid == 0x035e))
-    {
-        printf("Payload is TNS_DATA_SQL_COMMAND2\n");   
-        return TNS_DATA_SQL_COMMAND2;
-    }
-    else if((data_flag == 0) && (id_subid == 0x0376))
-    {
-        printf("Payload is TNS_DATA_USER_INFO\n");
-        return TNS_DATA_USER_INFO;
-    }
-    else if((data_flag == 0) && (id_subid == 0x0305))
-    {
-        printf("Payload is TNS_DATA_FETCH_MORE\n");
-        return TNS_DATA_FETCH_MORE;
+        main_cache_block = ptr->request_cache_block_p[0];
     }
     else
     {
-        printf("Payload is TNS_DATA_ALL_OTHER\n");
-        return TNS_DATA_ALL_OTHER;
+        main_cache_block = ptr->response_cache_block_p[0];
     }
-}
-
-int idpi_tns_parse_payload_data(idpi_tns_parser_t* tns_flow_ptr)
-{
-    idpi_tns_parser_t *ptr = tns_flow_ptr;
 
     if(ptr != NULL && ptr->content_type == TNS_TYPE_DATA)
     {
-        uint8_t *parser_cursor = ptr->main_cache_block + 8;
+        uint8_t *parser_cursor = main_cache_block + 8;
 
         uint16_t data_flag;
         uint16_t id_subid;
@@ -446,29 +497,37 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t* tns_flow_ptr)
         id_subid_extended += parser_cursor[1];
         printf("id_subid_extended is %x\n", id_subid_extended);
 
-        payload_data_type = idpi_tns_parse_payload_data_type(data_flag, id_subid, id_subid_extended);
-    
-        switch(payload_data_type)
+        if((data_flag == 0) && (id_subid == 0x1169) && (id_subid_extended == 0x1201))
         {
-            case TNS_DATA_SQL_COMMAND1://need add decide whether is selcet
-                //printf("Payload is SQL COMMAND1:\n%s\n", (parser_cursor+67));
-                
-                break;
-
-            case TNS_DATA_SQL_COMMAND2://need add decide whether is selcet
-                //printf("Payload is SQL COMMAND2:\n%s\n", (parser_cursor+55));
-                
-                break;
-
-            case TNS_DATA_USER_INFO:
-                //printf("Payload is USER INFO:\n%s\n", (parser_cursor+18));
-                
-                break;
-
-            case TNS_DATA_ALL_OTHER:
-                printf("Payload is TNS_DATA_ALL_OTHER to be ignore\n"); 
-                break;
-            //TODO other cases
+            //TODO end fo connect client
+            printf("Payload is TNS_DATA_RESPONSE_CLOSE_SESSION\n"); 
+            return TNS_DATA_RESPONSE_CLOSE_SESSION;
+        }
+        else if((data_flag == 0) && (id_subid == 0x1169))
+        {
+            //TODO end of connect server
+            printf("Payload is TNS_DATA_SQL_COMMAND1\n");   
+            return TNS_DATA_SQL_COMMAND1;
+        }
+        else if((data_flag == 0) && (id_subid == 0x035e))
+        {
+            printf("Payload is TNS_DATA_SQL_COMMAND2\n");   
+            return TNS_DATA_SQL_COMMAND2;
+        }
+        else if((data_flag == 0) && (id_subid == 0x0376))
+        {
+            printf("Payload is TNS_DATA_USER_INFO\n");
+            return TNS_DATA_USER_INFO;
+        }
+        else if((data_flag == 0) && (id_subid == 0x0305))
+        {
+            printf("Payload is TNS_DATA_FETCH_MORE\n");
+            return TNS_DATA_FETCH_MORE;
+        }
+        else
+        {
+            printf("Payload is TNS_DATA_ALL_OTHER\n");
+            return TNS_DATA_ALL_OTHER;
         }
 
         data_flag = 0;
@@ -479,10 +538,7 @@ int idpi_tns_parse_payload_data(idpi_tns_parser_t* tns_flow_ptr)
     {
         return ERROR;
     }
-
-    return COMPLETE;
 }
-
 
 int idpi_tns_print_header(idpi_tns_parser_t *ptr)
 {
@@ -492,8 +548,10 @@ int idpi_tns_print_header(idpi_tns_parser_t *ptr)
     printf("*   ptr->content_type %s\n", content_type_array[ptr->content_type]);
     printf("*   ptr->direction %u\n", ptr->direction);
     printf("*   ptr->tns_pkt_length %u\n", ptr->tns_pkt_length);
-    printf("*   ptr->cached_num %u\n", ptr->cached_num);
-    printf("*   ptr->curr_cache_block %u\n", ptr->curr_cache_block);
+    printf("*   ptr->request_cached_num %u\n", ptr->request_cached_num);
+    printf("*   ptr->response_cached_num %u\n", ptr->response_cached_num);
+    printf("*   ptr->request_curr_cache_block %u\n", ptr->request_curr_cache_block);
+    printf("*   ptr->response_curr_cache_block %u\n", ptr->response_curr_cache_block);
     printf("*   ptr->parse_state %s\n", parse_state_array[ptr->parse_state]);
 
     printf("**********************************************\n");
@@ -520,7 +578,7 @@ int idpi_tns_parse_payload(idpi_tns_parser_t *ptr)
 
             case TNS_TYPE_DATA:
                 printf("TNS_TYPE_DATA\n");
-                idpi_tns_parse_payload_data(ptr);
+                idpi_tns_parse_payload_data_type(ptr);
                 break;
 
             case TNS_TYPE_RESEND:
@@ -564,13 +622,117 @@ int idpi_tns_parse_payload(idpi_tns_parser_t *ptr)
     return COMPLETE;
 }
 
-/*idpi_tns_parse_log_process(idpi_tns_parser_t* tns_flow_ptr)
+int idpi_tns_parse_alloc_logbuf(idpi_tns_parser_t *ptr)
+{
+    //ptr->logbuf_start = hili_send_module_fpa_alloc(); 
+    ptr->logbuf_start = (uint8_t *)malloc(IDPI_TNS_LOGBUF_LEN_MAX); 
+    if (!ptr->logbuf_start)
+    {
+        //return ptr->err_code = __IDPI_HTTP_PARSE_OUT_OF_MEM;
+        return -1;
+    }
+
+    //memset(ptr->logbuf_start, 0, 16);
+    ptr->logbuf_curr = ptr->logbuf_start + 16;
+
+    *((uint16_t*)(ptr->logbuf_start + 8)) = 0x1;/*type tns*/
+    ptr->logbuf_start[11] = 0x01;/* last segment default */
+    *((uint16_t*)(ptr->logbuf_start + 12)) = 0; /* segment count */
+
+    return 0;
+
+}
+
+int idpi_tns_parse_print_logbuf(idpi_tns_parser_t *ptr)
+{
+    int i = 0;
+    printf("logbuffer is:\n");
+    for(i = 0; i < (ptr->logbuf_curr - ptr->logbuf_start); i++)
+    {
+        printf("%u", *(ptr->logbuf_start + i));
+    }
+    printf("\n");
+}
+
+int idpi_tns_parse_send_logbuf(idpi_tns_parser_t *ptr, unsigned char is_segmented, unsigned char is_last_segment)
+{
+    ptr->logbuf_start[10] = is_segmented;
+    ptr->logbuf_start[11] = is_last_segment;
+    *(uint16_t*)(ptr->logbuf_start + 12) = (is_segmented?(++ptr->segment_count):0); /* segment count */
+    *(uint16_t*)(ptr->logbuf_start + 14) = (ptr->logbuf_curr - ptr->logbuf_start - 16); /* log's variable content size */
+    //hili_send_module_send_udp_packet(ptr->logbuf_start, ptr->logbuf_curr - ptr->logbuf_start, &ptr->send_conf);
+
+    memset(ptr->logbuf_start, '\0', ptr->logbuf_curr - ptr->logbuf_start);
+
+    printf("idpi_tns_parse_send_logbuf\n");
+    ptr->logbuf_start = ptr->logbuf_curr = 0;
+
+    return 0;
+}
+
+int idpi_tns_parse_finish_log(idpi_tns_parser_t *ptr)
+{
+    if (!ptr->logbuf_start) 
+        return -1;
+    return idpi_tns_parse_send_logbuf(ptr, ptr->segment_count, 1);
+}
+
+int idpi_tns_parse_create_log(idpi_tns_parser_t *ptr)
+{
+    if (idpi_tns_parse_alloc_logbuf(ptr))
+    {
+        printf("idpi_tns_parse_create_log failure\n");
+        return ERROR;
+    }
+    
+    strcpy(ptr->logbuf_curr, "2015-01-09-00-00-00");
+    ptr->logbuf_curr += 30; /* ignore login time field */ 
+
+    uint16_t *var16p = (uint16_t*)ptr->logbuf_curr;
+    *var16p++ = ptr->tns_version;
+    *var16p++ = ptr->client_port;
+    *var16p++ = ptr->server_port;
+
+    uint32_t *var32p = (uint32_t*)var16p;
+    *var32p++ = ptr->client_ip;
+    *var32p++ = ptr->server_ip;
+
+    ptr->logbuf_curr = (unsigned char*)var32p;
+    strcpy(ptr->logbuf_curr, "2015-01-09-00-00-00");
+    ptr->logbuf_curr += 30; /* ignore login time field */ 
+    strcpy(ptr->logbuf_curr, "2015-01-09-00-00-00");
+    ptr->logbuf_curr += 30; /* ignore login time field */ 
+
+    printf("idpi_tns_parse_create_log\n");
+    /* next thing to log is content data */ 
+
+    return 0;
+}
+
+int idpi_tns_parse_free_logbuf(idpi_tns_parser_t *ptr)
+{
+    free(ptr->logbuf_start);
+    ptr->logbuf_start = ptr->logbuf_curr = 0;
+    return 0;
+}
+
+idpi_tns_parse_log_process(idpi_tns_parser_t* tns_flow_ptr)
 {
     idpi_tns_parser_t *ptr = tns_flow_ptr;
 
     if(ptr)
     {
-        if()
+        if(ptr->parse_state == __IDPI_TNS_PARSE_STATE_REQUESTED)
+        {
+            if(ERROR != idpi_tns_parse_create_log(ptr))
+            {
+
+            }
+        }
+        else if(ptr->parse_state == __IDPI_TNS_PARSE_STATE_RESPONDED)
+        {
+
+        }
     }
     else
     {
@@ -578,7 +740,7 @@ int idpi_tns_parse_payload(idpi_tns_parser_t *ptr)
     }
 
     return COMPLETE;
-}*/
+}
 
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction)
 {
@@ -616,6 +778,11 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
         idpi_tns_parse_state_switch(ptr);
 
         idpi_tns_parse_payload(ptr);
+
+        if(ptr->parse_state == __IDPI_TNS_PARSE_STATE_REQUESTED || ptr->parse_state == __IDPI_TNS_PARSE_STATE_RESPONDED)
+        {
+            //idpi_tns_parse_log_process(ptr);
+        }
         
         idpi_tns_parse_free_backup_cache_block(ptr);
 

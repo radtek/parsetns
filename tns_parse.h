@@ -1,5 +1,6 @@
-#define IDPI_TNS_MEMO_LEN_LIMIT 1800
-
+#define IDPI_TNS_MEMO_LEN_LIMIT 60
+#define IDPI_TNS_MAX_NUM_CACHE_BLOCK 8
+#define IDPI_TNS_LOGBUF_LEN_MAX 1472
 #define USERNAME_MAX_LENGTH 100
 
 #define DIR_REQUEST 0
@@ -132,18 +133,19 @@ typedef struct
 
     uint8_t *logbuf_start; /*start addr of log buffer*/
     uint8_t *logbuf_curr; /*next addr to write in log buffer*/ 
-    uint8_t logging_flag;
     uint32_t segment_count;
 
     uint8_t *username[USERNAME_MAX_LENGTH];
 
-    uint8_t curr_cache_block;
-    uint8_t *cache_block_p; /*start p of current block*/
-    uint8_t main_cache_block[IDPI_TNS_MEMO_LEN_LIMIT]; /*memo*/
-#define IDPI_TNS_NUM_BACKUP_CACHE_BLOCK 8
-    uint8_t *backup_cache_block[IDPI_TNS_NUM_BACKUP_CACHE_BLOCK];
-    uint32_t cached_num;
-    uint32_t curr_cache_block_left;
+    uint8_t request_curr_cache_block;
+    uint8_t *request_cache_block_p[IDPI_TNS_MAX_NUM_CACHE_BLOCK]; /*start p of current block*/
+    uint32_t request_cached_num;
+    uint32_t request_curr_cache_block_left;
+
+    uint8_t response_curr_cache_block;
+    uint8_t *response_cache_block_p[IDPI_TNS_MAX_NUM_CACHE_BLOCK]; /*start p of current block*/
+    uint32_t response_cached_num;
+    uint32_t response_curr_cache_block_left;
 }idpi_tns_parser_t;
 
 typedef struct{
