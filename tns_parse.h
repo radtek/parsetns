@@ -1,7 +1,14 @@
-#define IDPI_TNS_MEMO_LEN_LIMIT 60
+#include "tns_312.h"
+#include "tns_313.h"
+#include "tns_314.h"
+#include "tns_315.h"
+
+#define IDPI_TNS_MEMO_LEN_LIMIT 2048
 #define IDPI_TNS_MAX_NUM_CACHE_BLOCK 8
 #define IDPI_TNS_LOGBUF_LEN_MAX 1472
 #define USERNAME_MAX_LENGTH 100
+#define CONNECTION_INFO_MAX_LENGTH 1500
+#define TIME_INFO_MAX_LEN 30
 
 #define DIR_REQUEST 0
 #define DIR_RESPONSE 1
@@ -125,17 +132,22 @@ typedef struct
 	uint32_t client_ip;
 	uint32_t server_ip;
 
+    uint8_t log_in_time[TIME_INFO_MAX_LEN];
+
 	uint16_t tns_pkt_length; /*bytes to read in pkt buffer*/
 
     uint32_t pktbuf_left; /*bytes to read in pkt buffer*/
     uint8_t *pktbuf_curr; /*next addr to read in pkt buffer*/
 	uint8_t *pktbuf_init; /*initial addr to read in pkt buffer*/
 
+    uint8_t need_to_log;
     uint8_t *logbuf_start; /*start addr of log buffer*/
     uint8_t *logbuf_curr; /*next addr to write in log buffer*/ 
     uint32_t segment_count;
 
-    uint8_t *username[USERNAME_MAX_LENGTH];
+    uint8_t username[USERNAME_MAX_LENGTH];
+    uint8_t connection_info[CONNECTION_INFO_MAX_LENGTH];
+    uint8_t magicshift;
 
     uint8_t request_curr_cache_block;
     uint8_t *request_cache_block_p[IDPI_TNS_MAX_NUM_CACHE_BLOCK]; /*start p of current block*/
@@ -182,3 +194,4 @@ static inline void idpi_tns_free_memo(void *ptr)
 extern void* idpi_tns_parse_flow_init();
 extern int idpi_http_parse_kill_flow(void* tns_flow_ptr);
 extern int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction);
+extern int idpi_tns_parse_send_logbuf(idpi_tns_parser_t *ptr, unsigned char is_segmented, unsigned char is_last_segment);
