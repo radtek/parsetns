@@ -30,6 +30,12 @@ enum
     UNSET = 0,
 };
 
+enum 
+{
+    FINISHED = 1, 
+    UNFINISHED = 0,
+};
+
 typedef enum
 {
     TNS_TYPE_CONNECT = 1,
@@ -142,7 +148,8 @@ typedef struct
 
     uint8_t need_to_log;
     uint8_t *logbuf_start; /*start addr of log buffer*/
-    uint8_t *logbuf_curr; /*next addr to write in log buffer*/ 
+    uint8_t *logbuf_curr; /*next addr to write in log buffer*/
+    uint16_t log_buffer_left; 
     uint32_t segment_count;
 
     uint8_t username[USERNAME_MAX_LENGTH];
