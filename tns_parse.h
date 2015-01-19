@@ -3,6 +3,8 @@
 #include "tns_314.h"
 #include "tns_315.h"
 
+//#define HILI_DEBUG
+
 #define IDPI_TNS_MEMO_LEN_LIMIT 2048
 #define IDPI_TNS_MAX_NUM_CACHE_BLOCK 8
 #define IDPI_TNS_LOGBUF_LEN_MAX 1472
@@ -15,8 +17,6 @@
 
 #define WAIT_FOR_BUFFER 1
 #define MESSAGE_IS_COMPLETE 0
-
-//#define HILI_DEBUG
 
 enum 
 {

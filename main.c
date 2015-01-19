@@ -7,7 +7,9 @@
 #include "tns_parse.h"
 #include "test_buffer2.h"
 
-
+/*******************************************************
+*test case main function
+*******************************************************/
 int main()
 {	
 	idpi_tns_parser_t *ptr = (idpi_tns_parser_t *)idpi_tns_parse_flow_init();
@@ -40,37 +42,18 @@ int main()
 
 	return 0;
 }
-
+/*******************************************************
+*tns_parse_module init.call by app 
+*******************************************************/
 #ifdef HILI_DEBUG
 int idpi_tns_parse_module_init() 
 { 
-    char *helper_buffer = (char*)cvmx_bootmem_alloc(IDPI_tns_CORE_HELPER_BUFFER_LEN*16, 128);
-    if (!helper_buffer)
-    {
-        /* char *syslog = "idpi_tns_parse_module_init(): tns module init failure. Out of mem\n"; */
-        /* hili_send_module_send_syslog(syslog, sizeof(syslog)); */
-        printf("%s(): tns module init failure. Out of mem.\n", __func__);
-    }
-
-    int i;
-    for (i = 0; i < 16; ++i)
-    {
-        core_helper_buffer[i] = helper_buffer + IDPI_tns_CORE_HELPER_BUFFER_LEN*i;
-    }
-
-    firstline_parser[IDPI_tns_DIRECTION_REQUEST] = idpi_tns_parse_method_line;
-    firstline_parser[IDPI_tns_DIRECTION_RESPONSE] = idpi_tns_parse_status_line;
-
-     
-    /* char syslog[100]; */
-    /* sprintf(syslog, "tns module initting(compile time %s-%s)..........\n", __DATE__, __TIME__); */
-    /* hili_send_module_send_syslog(syslog, sizeof(syslog)); */
-    printf("tns module initting(compile time %s-%s)..........\n", __DATE__, __TIME__);
-    assert(sizeof(idpi_tns_parser_t) < 2048);
     return 0;
 }
 #endif
-
+/*******************************************************
+*init the context struct for every pair of request & response
+*******************************************************/
 void idpi_tns_context_init(idpi_tns_parser_t *tns_flow_ptr)
 {
 	idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -118,14 +101,16 @@ void idpi_tns_context_init(idpi_tns_parser_t *tns_flow_ptr)
     ptr->response_cached_num = 0;    
     ptr->response_curr_cache_block_left = IDPI_TNS_MEMO_LEN_LIMIT;
 }
-
+/*******************************************************
+*create the context struct for each flow, call by app
+*******************************************************/
 void* idpi_tns_parse_flow_init()//tns_parse_flow_conf_t *conf)
 {
     idpi_tns_parser_t *ptr = idpi_tns_alloc_parser();
 
     if (!ptr) 
     {
-        printf("error\n");
+        printf("idpi_tns_alloc_parser error\n");
         return NULL;
     }
     
@@ -144,7 +129,9 @@ void* idpi_tns_parse_flow_init()//tns_parse_flow_conf_t *conf)
 
     return (void*)ptr;
 }
-
+/*******************************************************
+*call by app for each end of flow
+*******************************************************/
 int idpi_tns_parse_kill_flow(void* tns_flow_ptr)
 {
     idpi_tns_parser_t *ptr = (idpi_tns_parser_t *)tns_flow_ptr;
@@ -161,7 +148,9 @@ int idpi_tns_parse_kill_flow(void* tns_flow_ptr)
 
     return COMPLETE;
 }
-
+/*******************************************************
+*cache message body from buffer until message is complete
+*******************************************************/
 int idpi_tns_parse_cache_message(idpi_tns_parser_t* tns_flow_ptr)
 {
 	idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -293,7 +282,9 @@ int idpi_tns_parse_cache_message(idpi_tns_parser_t* tns_flow_ptr)
 	
 	return COMPLETE;
 }
-
+/*******************************************************
+*switch parse state of context according to content type
+*******************************************************/
 int idpi_tns_parse_state_switch(idpi_tns_parser_t* tns_flow_ptr)
 {
     idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -354,7 +345,9 @@ int idpi_tns_parse_state_switch(idpi_tns_parser_t* tns_flow_ptr)
 
     return COMPLETE;
 }
-
+/*******************************************************
+*iparse tns message header(first 8 bytes)
+*******************************************************/
 int idpi_tns_parse_header(idpi_tns_parser_t* tns_flow_ptr)
 {
     uint8_t *main_cache_block;
@@ -385,7 +378,9 @@ int idpi_tns_parse_header(idpi_tns_parser_t* tns_flow_ptr)
 
     return COMPLETE;
 }
-
+/*******************************************************
+*parse payload of accept type. Record the tns version
+*******************************************************/
 int idpi_tns_parse_payload_accept(idpi_tns_parser_t* tns_flow_ptr)
 {
     uint8_t *main_cache_block;
@@ -415,7 +410,9 @@ int idpi_tns_parse_payload_accept(idpi_tns_parser_t* tns_flow_ptr)
         
     return COMPLETE;
 }
-
+/*******************************************************
+*parse payload of connect type. Record the connection info
+*******************************************************/
 int idpi_tns_parse_payload_connect(idpi_tns_parser_t* tns_flow_ptr)
 {
     idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -435,7 +432,9 @@ int idpi_tns_parse_payload_connect(idpi_tns_parser_t* tns_flow_ptr)
         printf("%c", ptr->connection_info[j]);
     printf("\n");
 }
-
+/*******************************************************
+*parse payload of data type. find valid data message to log
+*******************************************************/
 uint8_t idpi_tns_parse_payload_data_type(idpi_tns_parser_t* tns_flow_ptr)
 {
     //TODO
@@ -517,7 +516,9 @@ uint8_t idpi_tns_parse_payload_data_type(idpi_tns_parser_t* tns_flow_ptr)
         return ERROR;
     }
 }
-
+/*******************************************************************************
+*return the magicshift to valid data in data payload according to tns version
+*******************************************************************************/
 uint8_t idpi_tns_parse_locate_valid_payload(idpi_tns_parser_t *ptr, uint8_t payload_data_type)
 {   //TODO add response
     if(ptr)
@@ -596,7 +597,9 @@ uint8_t idpi_tns_parse_locate_valid_payload(idpi_tns_parser_t *ptr, uint8_t payl
     else
         return ERROR;
 }
-
+/****************************************************
+*print some info of context for each parse_process
+*****************************************************/
 int idpi_tns_print_header(idpi_tns_parser_t *ptr)
 {
     printf("**********************************************\n");
@@ -615,7 +618,9 @@ int idpi_tns_print_header(idpi_tns_parser_t *ptr)
 
     return COMPLETE;
 }
-
+/****************************************************
+*alloc log buffer
+*****************************************************/
 int idpi_tns_parse_alloc_logbuf(idpi_tns_parser_t *ptr)
 {
     //ptr->logbuf_start = hili_send_module_fpa_alloc(); 
@@ -635,7 +640,9 @@ int idpi_tns_parse_alloc_logbuf(idpi_tns_parser_t *ptr)
 
     return 0;
 }
-
+/****************************************************
+*show the content in log buffer
+*****************************************************/
 int idpi_tns_parse_print_logbuf(idpi_tns_parser_t *ptr)
 {
     int i = 0;
@@ -646,7 +653,11 @@ int idpi_tns_parse_print_logbuf(idpi_tns_parser_t *ptr)
     }
     printf("\n");
 }
-
+/****************************************************
+*send log :
+*1)a pair of request & response is finished
+*2)the log is full to send segment of it
+*****************************************************/
 int idpi_tns_parse_send_logbuf(idpi_tns_parser_t *ptr, unsigned char is_segmented, unsigned char is_last_segment)
 {
     ptr->logbuf_start[10] = is_segmented;
@@ -663,7 +674,9 @@ int idpi_tns_parse_send_logbuf(idpi_tns_parser_t *ptr, unsigned char is_segmente
 
     return 0;
 }
-
+/****************************************************
+*create a log for each pair of request & response
+*****************************************************/
 int idpi_tns_parse_create_log(idpi_tns_parser_t *ptr)
 {
     if (idpi_tns_parse_alloc_logbuf(ptr))
@@ -701,14 +714,18 @@ int idpi_tns_parse_create_log(idpi_tns_parser_t *ptr)
 
     return 0;
 }
-
+/****************************************************
+*free the log buffer ptr
+*****************************************************/
 int idpi_tns_parse_free_logbuf(idpi_tns_parser_t *ptr)
 {
     free(ptr->logbuf_start);
     ptr->logbuf_start = ptr->logbuf_curr = 0;
     return 0;
 }
-
+/****************************************************
+*write valid data to log for each cach_block
+*****************************************************/
 int idpi_tns_parse_log_valid_message(idpi_tns_parser_t* tns_flow_ptr, uint8_t *copy_start_p, uint32_t copy_length, uint8_t cache_block_num)
 {
     idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -774,7 +791,9 @@ int idpi_tns_parse_log_valid_message(idpi_tns_parser_t* tns_flow_ptr, uint8_t *c
         return ERROR;
     }
 }
-
+/****************************************************
+*main process of write log
+*****************************************************/
 int idpi_tns_parse_log_process(idpi_tns_parser_t* tns_flow_ptr)
 {
     idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -839,7 +858,9 @@ int idpi_tns_parse_log_process(idpi_tns_parser_t* tns_flow_ptr)
 
     return COMPLETE;
 }
-
+/****************************************************
+*tns parse main process call by app
+*****************************************************/
 int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32_t buf_len, uint8_t direction)
 {
 	idpi_tns_parser_t *ptr = tns_flow_ptr;
@@ -859,7 +880,7 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
     uint8_t magicshift_to_data;
 
     printf("##############################################\n");
-    printf("######## New Buffer, Parse Start Here ! ######\n");
+    printf("####### New Buffer, Parse Start Here ! #######\n");
     printf("##############################################\n");
     printf("%s(): buf_len is %u.\n", __func__, buf_len);
 
@@ -929,8 +950,6 @@ int idpi_tns_parse_processing(idpi_tns_parser_t* tns_flow_ptr, void* buf, uint32
             idpi_tns_parse_payload_accept(ptr);
         }
         
-        //idpi_tns_parse_free_backup_cache_block(ptr);
-
         idpi_tns_parse_state_switch(ptr);
 
         ptr->wait_flag == WAIT_FOR_BUFFER;
